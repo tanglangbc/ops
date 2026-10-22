@@ -1,0 +1,5 @@
+{"record":"open","sessionId":"session-7a396410-189d-4b37-b23a-2bdb0f83e8d3","cwd":"D:\\ops","at":"2026-10-22T03:08:28.153Z"}
+{"record":"event","seq":0,"time":1792638508079,"type":"permission/preset"}
+{"record":"event","seq":1,"time":1792638508080,"type":"sandbox/mode"}
+{"record":"event","seq":2,"time":1792638508107,"type":"approval/policy"}
+{"record":"event","seq":3,"time":1792638561598,"type":"agent-preset/selected"}
