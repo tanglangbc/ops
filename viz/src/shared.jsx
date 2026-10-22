@@ -32,7 +32,9 @@ export function MetaBar({ manifest, experiment, caliber, fallbackNote }) {
       </div>
     )
   }
-  const src = `${manifest.artifact_path} · sha ${manifest.artifact_sha256_16}…`
+  // 页面有时拿到的是原始 manifest（含完整 sha256），有时是精简过的（含 *16）——两种都要认
+  const sha16 = manifest.artifact_sha256_16 || String(manifest.artifact_sha256 || '').slice(0, 16) || '核不到'
+  const src = `${manifest.artifact_path} · sha ${sha16}…`
   const gen = (manifest.produced_at_utc || '核不到')
   const cov = manifest.coverage?.end_utc || '核不到'
   return (

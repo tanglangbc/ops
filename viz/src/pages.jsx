@@ -83,6 +83,13 @@ export function L2ForwardPage({ data }) {
           <span>correction {d.kinds.correction}</span>
           <span>行数口径：manifest 注明 incl/excl header</span>
         </div>
+        {d.series.some(s => s.date === '(无记录日)') ? (
+          <Gap title="10 行没有 record_date（单列了一格）">
+            correction 行只带 <code>row_id / kind / written_at</code>，没有 <code>record_date</code>——
+            按记录日计数时它无法归入任何一天，因此单列成「(无记录日)」一柱，
+            <b>不并入相邻日期，也不隐藏</b>。要按天看它们，得回源看 <code>written_at</code>。
+          </Gap>
+        ) : null}
       </Card>
     </>
   )

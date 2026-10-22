@@ -58,8 +58,12 @@ const problems = []   // 缺口/核不到，全部显式带到页面上（不许
 function bakeL2Forward() {
   const rows = readJsonl(path.join(REPORTS, 'L2_FORWARD_LEDGER.jsonl'))
   const byDate = new Map()
+  let noDate = 0
   for (const r of rows) {
-    const d = r.record_date || '核不到'
+    // correction 行只有 row_id/kind/written_at，没有 record_date：单列一格，不并入任何一天
+    const hasDate = Boolean(r.record_date)
+    if (!hasDate) noDate++
+    const d = hasDate ? r.record_date : '(无记录日)'
     if (!byDate.has(d)) byDate.set(d, { date: d, daily: 0, backfill: 0, correction: 0, total: 0 })
     const e = byDate.get(d)
     e.total++
@@ -69,6 +73,7 @@ function bakeL2Forward() {
   }
   const series = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
   if (!series.length) problems.push({ page: 'l2-forward', what: '台账一行都没有' })
+  if (noDate) problems.push({ page: 'l2-forward', what: `${noDate} 行没有 record_date（全部是 correction 行），已单列一格「(无记录日)」，不并入任何一天` })
   return {
     series,
     kinds: { daily: rows.filter(r => r.kind === 'daily').length, backfill: rows.filter(r => r.kind === 'backfill').length, correction: rows.filter(r => r.kind === 'correction').length },
