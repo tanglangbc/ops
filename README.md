@@ -42,30 +42,50 @@ node tools/session-digest.mjs --all        # 全部会话一览（体积 / 记�
 
 三类 session 级坑已记在 `docs/gotchas.md`：G-001 写文件吞反斜杠、G-002 工具面中途会变、G-003 热重载文件的读保护。
 
-## 数据根的真源快照（复盘第 6 条）
+## 数据根的版本控制与快照（复盘第 6 条 · 已执行）
 
-`D:\workspace\代币交流群` **不是 git 仓**，而台账、决策记录、冻结件、16 份 manifest 全在里面——一次误改就没有回退点。该根整体 **60 MB+**（`reports/` 含大量过程产物），所以不能整目录快照，只快照「真源」。
+### 先修正一条结论：那个数据根**部分**已经是 git 仓
+
+我在复盘里写「数据根不是 git 仓」——**不准确**。实查：`<数据根>\binance-spot-quant\` **早有独立 git 仓**
+（branch `master`、383 个跟踪文件、3 次提交、**无远端**），它跟踪的是源码/测试/文档。
+
+真正的问题在别处，有两处：
+
+1. **它把自己最不可再生的件挡在了门外**：`.gitignore` 里 `reports/**/*.jsonl` 的本意是挡「跑一次就重新生成」的过程产物，
+   但**台账与两份采集历史是只追加、按天累积**的证据，被同一条规则连带排除；
+2. **这个根本身没有版本控制**：`tools/`（生产者脚本）、`research/`（研究脚本与笔记）、
+   `viz/manifests/` + 契约文档，全在无历史的目录里。
+
+### 本次做了两件事
+
+| 动作 | 落点 | 结果 |
+|---|---|---|
+| ① 子仓纳入证据件 | `<根>\binance-spot-quant\` | 新提交 `b5e166e`：`L2_FORWARD_LEDGER.jsonl`、`_l2_acceptance_history.jsonl`、`_carry_now_history.jsonl`、`DECISION_LOG.md`；`.gitignore` 里给这三件加了**带理由的例外**（regenerable 的 `reports/*.json|csv` 仍不入库） |
+| ② 根仓 init | `<根>\.git` | 新提交 `484f6d7`：**81 个文件 / 2.4 MB**（`tools/`、`research/`、`viz/manifests/`、契约文档、`tests/`）；工作区干净 |
+
+排除范围（合计 **400+ MB 全部不入库**）：`binance-spot-quant/`（自带历史，避免嵌套仓）、
+`_*_scratch/`、`_v2/`、`_dshlib/`、`_packages/`、`_quarantine_*/`、`logs/`、`_snapshots/`、
+根层 `reports/`（探测残留含 vendored deps）、以及 viz 的全部生成物（`dist*`、`node_modules`、`src/gen`、`deliver`）。
+
+### 与「真源快照」的分工（两者都留，不互相替代）
+
+- **git 管 diff 与归因**：谁在什么时候改了哪一行，可回溯；
+- **快照管时间点全景**：`--with-inputs` 那一档会把**未入库的大输入**（5 份资金费 CSV 等）也留一份，
+  这是 git 不做的（那是 2 MB 的二进制/数据，不适合进历史）。
 
 ```powershell
-node tools/snapshot-truth.mjs                     # ① 决策与台账（25 件 / 约 159 KB）
-node tools/snapshot-truth.mjs --with-inputs        # ② 再加 manifest 引用的原始输入（+16 件 / 约 2.1 MB）
-node tools/snapshot-truth.mjs --dry-run             # 只报清单不落盘
+node tools/snapshot-truth.mjs                  # ① 决策与台账（25 件 / 159 KB）
+node tools/snapshot-truth.mjs --with-inputs     # ② 含原始输入（41 件 / 2.2 MB）
 ```
 
-- 落点：`<数据根>\_snapshots\<UTC 时刻>\`（保留相对路径 + `SHA256SUMS` + `TRUTH_SET.md`），外加一份 `INDEX.md` 索引；
-- **内容与上一次相同则跳过**——只在真变了才生成新快照，历史表就是「变化日志」，不堆副本；
-- 保留最近 **30** 份，自动裁剪；
-- 计划任务 **`\mss002-truth-snapshot`（每日 09:45）**，排在 L2 记录 08:10 / 采集 09:00 / 构建 09:30 之后；
-- 抽查过：快照里 ledger 的 sha256 与现场文件一致（`3b8ecd0199…`）。
-- 回滚：`schtasks /delete /tn "\mss002-truth-snapshot" /f`，并删掉 `_snapshots/`（两者都不影响数据链）。
+计划任务 `\mss002-truth-snapshot`（每日 09:45）自动跑 ①。
 
-**没做的一件事（等你点头）**：`git init` 那个数据根。
-快照给的是「时间点副本 + 完整性证明」，git 才能给 diff 与归因。真要 git 化，建议**只纳入真源集**并配一份 `.gitignore`：
+### 回滚（两处各自独立）
 
-```
-data/            # 5 份资金费 CSV + 日线 CSV ≈ 2 MB（用快照 ② 兜底即可）
-reports/*.csv / *_scratch/ / _quarantine_*/ / _packages/   # 过程产物与 60 MB 的大头
-.vscode/  _snapshots/   # _snapshots 自身不入库（它是快照，不是历史）
+```powershell
+Remove-Item -Recurse -Force "<根>\.git"                      # 去掉根仓（快照与子仓历史都不受影响）
+cd "<根>\binance-spot-quant"; git reset --hard 590823f      # 回到纳入证据件之前（590823f 是上一提交）
+schtasks /delete /tn "\mss002-truth-snapshot" /f             # 停掉快照任务
 ```
 
-体积估计：首次提交约 **0.2 MB**（真源集）。这是一次**结构性改动**（在数据根里放 `.git`），我按纪律先给方案、不动手。
+**两个仓都没有远端**——历史只在本机。要不要推到远端是另一个决定（涉及数据是否离开本机，我不擅自做）。

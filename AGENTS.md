@@ -8,7 +8,7 @@
 - **领域词汇**（三档 / 核不到 / 闸门 / 记录日与期望 bar / manifest）：`GLOSSARY.md`。
 - **踩过的坑**（写文件时 heredoc 会吞反斜杠 G-001；会话中途工具面会变、`unknown tool` 是一次性信号 G-002；热重载文件的读保护 G-003）：`docs/gotchas.md`。
 - **看页面**（空白 / 没上色 / 过窄用 `viz/tools/shot-check.mjs` 机械筛掉；**好不好看需要图像能力的人或模型**，当前模型不接受图像输入，没看过就写「未目检」）。
-- **数据根的真源快照**（那个数据根不是 git 仓；改它之前先知道它有快照目录可回退，每日 09:45 由计划任务生成）：`tools/snapshot-truth.mjs`。
+- **数据根的工作区**（根仓 + `binance-spot-quant` 子仓各自独立，过程产物不入库；每日 09:45 另有真源快照可回退）：`README.md` 的「数据根的版本控制与快照」一节 + `tools/snapshot-truth.mjs`。
 
 ## Agent skills
 
