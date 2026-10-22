@@ -182,7 +182,7 @@ export function EdgeScanPage({ data }) {
         right={<><span className="badge fact">已发生事实</span>{tf?.counts ? <span className="status insufficient" style={{ marginLeft: 6 }}>noise {tf.counts.noise} / dead {tf.counts.dead}</span> : null}</>}>
         <Chart option={scatter} height={320} />
       </Card>
-      <Card title="按样本外净收益排序（前 40）" sub="完整 135 行的原件在 reports/edge_scan_*.json，本页只装展示所需字段">
+      <Card title="按样本外扣费后净额排序（前 40）" sub="完整 135 行的原件在 reports/edge_scan_*.json，本页只装展示所需字段">
         {sorted.length ? (
           <div className="tablewrap">
             <table>
