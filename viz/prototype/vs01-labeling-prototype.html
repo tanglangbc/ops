@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE · VS-01 三档标注与 carry 双数（占位数据）</title>
+<!--
+  PROTOTYPE — 一次性产物，不是生产代码。问题：「三档标注 / carry 双数 / 缺口 / 元数据条」到底该长什么样？
+  三个结构不同的变体，用 ?variant=A|B|C 切换（底部浮动条或 ← → 键）。
+  数据全部是占位值，除 carry 那一对（来自 VS-01 §3 原文）；占位值均带「占位」标记。
+  变体之间刻意不共享布局：A=卡片流 / B=看板+图例侧栏 / C=表格（可打印）。
+  票：#7 https://github.com/tanglangbc/ops/issues/7 · 规范：research/VS_01_可视化规范.md
+-->
+<style>
+  :root{
+    --ink:#12161c; --muted:#6b7280; --line:#e3e7ee; --bg:#f6f8fb; --card:#ffffff;
+    --fact:#0f766e; --infer:#b45309; --hypo:#6b7280;
+    --stale:#b91c1c; --ok:#15803d;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       padding:0 0 76px}
+  header.top{background:#111827;color:#fff;padding:10px 18px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  header.top .proto{background:#f59e0b;color:#111827;font-weight:700;padding:1px 8px;border-radius:999px;font-size:12px}
+  header.top h1{font-size:15px;margin:0;font-weight:600}
+  header.top .meta{color:#9ca3af;font-size:12px}
+
+  /* #9 页面级陈旧红条（与图级灰块语义不同，禁止合并） */
+  .stale-bar{background:var(--stale);color:#fff;padding:8px 18px;font-size:13px;display:flex;gap:10px;align-items:center}
+  .stale-bar b{font-weight:700}
+  .stale-bar .spacer{flex:1}
+  .stale-bar button{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.5);
+                    border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer}
+
+  .cols{display:flex;gap:18px;padding:18px;align-items:flex-start}
+  .main{flex:1;min-width:0}
+  .side{width:300px;flex:0 0 300px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .card h3{margin:0 0 8px;font-size:14px}
+  .objtitle{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .objtitle .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+  /* 元数据条：VS-01 §5 六项，缺一即作废 */
+  .metabar{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+  .metabar span{font-family:var(--mono);font-size:11px;background:#f1f5f9;border:1px solid var(--line);
+                border-radius:5px;padding:1px 6px;color:#334155;white-space:nowrap}
+  .metabar span.k{color:#0f172a;font-weight:600;background:#e2e8f0}
+
+  .badge{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid;white-space:nowrap}
+  .badge.fact{color:var(--fact);border-color:var(--fact)}
+  .badge.infer{color:var(--infer);border-color:var(--infer)}
+  .badge.hypo{color:var(--hypo);border-color:var(--hypo)}
+  .status{font-size:11px;border-radius:5px;padding:1px 8px;font-weight:600}
+  .status.pass{background:#dcfce7;color:#166534}
+  .status.fail{background:#fee2e2;color:#991b1b}
+  .status.insufficient{background:#fef3c7;color:#92400e}
+  .status.na{background:#e5e7eb;color:#4b5563}
+
+  .ph{font-size:10px;color:#b45309;background:#fffbeb;border:1px dashed #f59e0b;border-radius:4px;padding:0 4px}
+  .fig svg{width:100%;height:88px;display:block}
+  body[data-variant="C"] td svg{width:100%;height:64px;display:block}
+  .gap{background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 8px,#e5e7eb 8px,#e5e7eb 16px);
+       border:1px dashed #9ca3af;color:#4b5563;border-radius:8px;padding:14px;text-align:center;font-size:12px}
+  .gap b{display:block;font-size:13px;color:#374151;margin-bottom:2px}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  /* carry 双数：两个数必须同画，各自带窗口与口径 */
+  .dual{display:flex;gap:10px;margin:8px 0 4px;flex-wrap:wrap}
+  .dual .d{flex:1;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff}
+  .dual .d .v{font-size:20px;font-weight:700;font-family:var(--mono)}
+  .dual .d .cap{font-size:11px;color:var(--muted);margin-top:2px}
+  .dual .d .win{font-size:11px;color:#334155;margin-top:4px;font-family:var(--mono)}
+
+  /* tooltip（hover 显示档位 + 溯源） */
+  .tip{position:relative;border-bottom:1px dotted #94a3b8;cursor:help}
+  .tip:hover::after{content:attr(data-tip);position:absolute;left:0;bottom:130%;z-index:9;
+    background:#111827;color:#f9fafb;font-size:11px;line-height:1.5;padding:6px 8px;border-radius:6px;
+    white-space:pre;box-shadow:0 6px 18px rgba(0,0,0,.25);max-width:420px}
+
+  /* ── 变体 A：卡片流 · 色带 + 角标 + tooltip ───────────────── */
+  body[data-variant="A"] .tier{position:relative;border-left:4px solid var(--line);padding-left:12px}
+  body[data-variant="A"] .tier-fact{border-left-color:var(--fact)}
+  body[data-variant="A"] .tier-infer{border-left-color:var(--infer)}
+  body[data-variant="A"] .tier-hypo{border-left-color:var(--hypo);opacity:.72}
+  body[data-variant="A"] .tier-hypo .fig{filter:grayscale(1)}
+  body[data-variant="A"] .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin-bottom:10px}
+  body[data-variant="A"] .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;
+    vertical-align:-1px;border:1px solid #cbd5e1}
+
+  /* ── 变体 B：看板 · 图例常驻侧栏 + 图案而非色带 ───────────── */
+  body[data-variant="B"] .side .legendcard{position:sticky;top:12px}
+  body[data-variant="B"] .tier{padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#fff}
+  body[data-variant="B"] .tier-fact{border-style:solid;border-width:2px}
+  body[data-variant="B"] .tier-infer{border-style:dashed;border-width:2px;
+    background:repeating-linear-gradient(135deg,#fff,#fff 10px,#fff7ed 10px,#fff7ed 20px)}
+  body[data-variant="B"] .tier-hypo{border-style:dotted;border-width:2px;color:#4b5563;
+    background:repeating-linear-gradient(0deg,#fff,#fff 6px,#f3f4f6 6px,#f3f4f6 12px)}
+  body[data-variant="B"] .lg-row{display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:12px}
+  body[data-variant="B"] .sw{width:26px;height:18px;flex:0 0 26px;border:2px solid #111827;border-radius:4px}
+  body[data-variant="B"] .sw.infer{border-style:dashed;background:repeating-linear-gradient(135deg,#fff,#fff 4px,#fed7aa 4px,#fed7aa 8px)}
+  body[data-variant="B"] .sw.hypo{border-style:dotted;background:repeating-linear-gradient(0deg,#fff,#fff 3px,#e5e7eb 3px,#e5e7eb 6px)}
+  body[data-variant="B"] .statusbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+
+  /* ── 变体 C：表格 · 可打印 / 色盲友好 ─────────────────────── */
+  body[data-variant="C"] .tablewrap{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto}
+  body[data-variant="C"] table{border-collapse:collapse;width:100%;font-size:13px}
+  body[data-variant="C"] th,body[data-variant="C"] td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  body[data-variant="C"] th{background:#f8fafc;font-size:12px;color:#334155;white-space:nowrap}
+  body[data-variant="C"] tr.fact{background:#fff}
+  body[data-variant="C"] tr.infer{background:repeating-linear-gradient(135deg,#fff,#fff 9px,#fff7ed 9px,#fff7ed 18px)}
+  body[data-variant="C"] tr.hypo{background:repeating-linear-gradient(0deg,#fff,#fff 6px,#f1f5f9 6px,#f1f5f9 12px);color:#4b5563}
+  body[data-variant="C"] .pfx{font-family:var(--mono);font-size:11px;font-weight:700}
+
+  /* 浮动切换条 */
+  #switcher{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:50;
+    display:flex;align-items:center;gap:10px;background:#111827;color:#fff;border-radius:999px;
+    padding:8px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:13px}
+  #switcher button{background:#374151;color:#fff;border:0;border-radius:999px;width:30px;height:30px;
+    font-size:15px;cursor:pointer;line-height:1}
+  #switcher button:hover{background:#4b5563}
+  #switcher .lbl{font-family:var(--mono);min-width:260px;text-align:center}
+  #switcher .hint{color:#9ca3af;font-size:11px}
+</style>
+</head>
+<body data-variant="A">
+<header class="top">
+  <span class="proto">PROTOTYPE · 一次性产物</span>
+  <h1>VS-01 三档标注 / carry 双数 / 缺口 / 元数据条 —— 三个结构不同的变体</h1>
+  <span class="meta">除 carry 那一对外，<b>全部数字是占位值</b>（带「占位」标记）。规范原文：research/VS_01_可视化规范.md §3/§5/§6</span>
+</header>
+
+<div class="stale-bar">
+  <b>本页数据停留在 2026-10-22 08:10</b>（超过 36 小时未刷新）
+  <span class="spacer"></span>
+  <button onclick="this.closest('.stale-bar').style.display='none'">切到「已刷新」状态看看</button>
+</div>
+
+<div class="cols">
+  <div class="main">
+
+    <!-- ① 三档区分演示 -->
+    <div class="card">
+      <div class="objtitle"><b>① 同一张图里三种档位</b><span class="id">VS-2.1 / VS-2.4 / VS-2.6</span>
+        <span class="badge fact">已发生事实</span><span class="badge infer">数据推断</span><span class="badge hypo">交易假设·未验证</span>
+      </div>
+      <div id="legend-slot"></div>
+      <div id="tier-demo"></div>
+    </div>
+
+    <!-- ② carry 双数同画 -->
+    <div class="card">
+      <div class="objtitle"><b>② carry 必须双数同画</b><span class="id">VS-2.5 / VS-2.6</span>
+        <span class="status insufficient">证据不足</span></div>
+      <div class="metabar">
+        <span><span class="k">来源</span> binance-spot-quant/data/*_funding.csv + reports/carry_models.json</span>
+        <span><span class="k">实验编号</span> CARRY-NOW-RECHECK</span>
+        <span><span class="k">口径</span> 资金费 3 次/日 × 365 折算；占用资本 = 名义 × 1.25</span>
+        <span><span class="k">生成时刻</span> 2026-10-22 15:5x CST <span class="ph">占位</span></span>
+        <span><span class="k">数据截止</span> 2026-10-21 08:00 UTC</span>
+        <span><span class="k">档位</span> 见下两数各自标注</span>
+      </div>
+      <div class="dual" id="dual-slot"></div>
+      <p style="font-size:12px;color:var(--muted);margin:6px 0 0">
+        规范红线：<b>只画 3.6% 就是把「30 天窗口的数」当「当前现实」</b>——所以这一格里两个数必须同时在场，
+        并且各自带窗口与口径。右侧那个「近 30 天实测」才是当前现实的读数。
+      </p>
+    </div>
+
+    <!-- ③ 缺口 -->
+    <div class="card">
+      <div class="objtitle"><b>③ 数据缺口必须显式</b><span class="id">VS-2.3</span>
+        <span class="status na">缺口 2 处</span></div>
+      <div class="metabar">
+        <span><span class="k">来源</span> _trader_4h_scratch/reports/backtest_metrics.json</span>
+        <span><span class="k">实验编号</span> XV-001</span>
+        <span><span class="k">口径</span> 单边滑点 0.05%、手续费 0.1%</span>
+        <span><span class="k">生成时刻</span> 2026-10-19 09:12 CST</span>
+        <span><span class="k">数据截止</span> 2026-10-11 00:00 UTC</span>
+        <span><span class="k">档位</span> 数据推断</span>
+      </div>
+      <div class="gap" style="margin:8px 0"><b>核不到</b>2025-07-12 ~ 2025-07-18 无 4h bar（源缺 6 根），该段不连线、不留白</div>
+      <div class="gap"><b>核不到</b>手续费实际费率未取到（账户无读取权限），本图使用<b>配置估值</b> 0.1%，不是你的真实费率</div>
+    </div>
+
+    <!-- ④ 状态四态 -->
+    <div class="card" id="status-demo">
+      <div class="objtitle"><b>④ 状态只有三种，不许自造</b><span class="id">status 封闭词表</span></div>
+      <div id="status-slot"></div>
+    </div>
+
+  </div>
+
+  <!-- 变体 B 的常驻侧栏；A/C 下自动隐藏 -->
+  <aside class="side" id="side"></aside>
+</div>
+
+<div id="switcher">
+  <button id="prev" title="上一个变体（←）">←</button>
+  <span class="lbl" id="lbl"></span>
+  <button id="next" title="下一个变体（→）">→</button>
+  <span class="hint">?variant=A|B|C · ← → 键切换</span>
+</div>
+
+<script>
+/* 占位数据（除 carry 一对）------------------------------------------------- */
+const CARRIED = {
+  runbook:   {v:"3.6%/年", win:"口径：runbook 回放层（全历史）", tier:"infer",
+              tip:"档位：数据推断\n来源：CARRY_RUNBOOK.md（回放层）\n注：不是实测，也不是承诺"},
+  measured:  {v:"1.8–2.1%/年", win:"窗口：最近 30 天实测", tier:"fact",
+              tip:"档位：已发生事实\n来源：binance-spot-quant/data/*_funding.csv\n行号：见 manifest.coverage.end"}
+};
+const TIERS = [
+  {k:"fact",  name:"已发生事实", note:"有文件+行号/哈希/官方链接支撑", n:"+6.40%", ph:true},
+  {k:"infer", name:"数据推断",   note:"由已发生数据推出来的，带 formula", n:"+7.24%/年", ph:true},
+  {k:"hypo",  name:"交易假设",   note:"无实测支撑的假设 —— 灰显并标「未验证」", n:"预计 +12%", ph:true}
+];
+const STATUSES = [
+  ["pass","通过"],["fail","不通过"],["insufficient","证据不足"],["na","不适用（非回测件）"]
+];
+
+/* 小图（手写 SVG，零依赖，file:// 可直接开）----------------------------- */
+function spark(seed, tier){
+  const pts=[];
+  let y=50;
+  for(let i=0;i<40;i++){ y += Math.sin((i+seed)/3.1)*6 + (((i*seed)%7)-3)*1.7; y=Math.max(12,Math.min(88,y)); pts.push([i*6, y]); }
+  const d=pts.map((p,i)=>(i?"L":"M")+p[0]+" "+p[1].toFixed(1)).join(" ");
+  const stroke = tier==="fact" ? "#0f766e" : (tier==="infer" ? "#b45309" : "#6b7280");
+  const dash   = tier==="infer" ? ' stroke-dasharray="5 3"' : (tier==="hypo" ? ' stroke-dasharray="2 4"' : "");
+  const fill   = tier==="hypo" ? "none" : (tier==="infer" ? "rgba(180,83,9,.10)" : "rgba(15,118,110,.12)");
+  return `<svg viewBox="0 0 240 100" width="100%" height="88" role="img" aria-label="占位走势">
+    <path d="${d} L234 100 L0 100 Z" fill="${fill}"/>
+    <path d="${d}" fill="none" stroke="${stroke}" stroke-width="2"${dash}/></svg>`;
+}
+function tierCard(t, i){
+  const badge = `<span class="badge ${t.k}">${t.k==="hypo"?"交易假设·未验证":t.name}</span>`;
+  return `<div class="tier tier-${t.k}" style="margin-bottom:10px">
+    <div class="objtitle">${badge}<span class="id">VS-2.${i+1} 占位对象</span>
+      <span class="status ${t.k==="hypo"?"insufficient":"pass"}">${t.k==="hypo"?"证据不足":"通过"}</span>
+      <span class="ph">占位</span></div>
+    <div class="metabar">
+      <span><span class="k">来源</span> ${t.k==="hypo"?"（无实测来源，方法待定）":"reports/_l2_run_20261022T001002Z.log :65"}</span>
+      <span><span class="k">实验编号</span> MSS-002</span>
+      <span><span class="k">口径</span> 费用每边 0.1% <span class="ph">占位</span></span>
+      <span><span class="k">生成时刻</span> 2026-10-22 08:10 CST</span>
+      <span><span class="k">数据截止</span> 2026-10-22 08:10 CST</span>
+      <span><span class="k">档位</span> ${t.name}</span>
+    </div>
+    <div class="fig">${spark(i+2, t.k)}</div>
+    <p style="margin:4px 0 0;font-size:12px">
+      区间累计 <span class="num tip" data-tip="${t.tip||("档位："+t.name+"\\n来源：见上方元数据条")}">${t.n}</span>
+      <span class="ph">占位</span> · <span style="color:var(--muted)">${t.note}</span>
+    </p>
+  </div>`;
+}
+
+/* 渲染 ------------------------------------------------------------------ */
+function render(variant){
+  document.body.dataset.variant = variant;
+
+  // A：卡片流，图例在上
+  document.getElementById("tier-demo").innerHTML = TIERS.map(tierCard).join("");
+  document.getElementById("legend-slot").innerHTML = (variant==="A")
+    ? `<div class="legend">
+         <span><i style="background:rgba(15,118,110,.25);border-color:#0f766e"></i>已发生事实：正常色</span>
+         <span><i style="background:rgba(180,83,9,.18);border-color:#b45309"></i>数据推断：加「推断」角标</span>
+         <span><i style="background:#e5e7eb;border-color:#6b7280"></i>交易假设：灰显 + 「未验证」</span>
+         <span style="color:var(--muted)">鼠标悬停任何数字，看它的档位与出处</span>
+       </div>`
+    : "";
+
+  // B：常驻侧栏图例 + 状态条
+  document.getElementById("side").innerHTML = (variant==="B")
+    ? `<div class="card legendcard"><h3>档位图例（本变体不靠颜色，靠图案）</h3>
+         ${TIERS.map(t=>`<div class="lg-row"><span class="sw ${t.k==="fact"?"":t.k}"></span>
+           <span><b>${t.name}</b><br><span style="color:var(--muted)">${t.note}</span></span></div>`).join("")}
+         <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
+         <div style="font-size:12px;color:var(--muted)">图案 + 边框样式在黑白打印与色盲下同样可辨；
+           代价是页面上多一个常驻栏。</div>
+       </div>`
+    : "";
+
+  // C：表格化（把同样的数据换一种结构）
+  if (variant==="C"){
+    document.getElementById("tier-demo").innerHTML = `<div class="tablewrap"><table>
+      <thead><tr><th>档位</th><th>对象</th><th>走势（占位）</th><th>区间累计（占位）</th><th>来源</th><th>状态</th></tr></thead>
+      <tbody>${TIERS.map((t,i)=>`<tr class="${t.k}">
+        <td><span class="pfx">[${t.k==="fact"?"事实":t.k==="infer"?"推断":"假设"}]</span> ${t.name}</td>
+        <td>VS-2.${i+1}</td>
+        <td style="width:220px">${spark(i+4,t.k)}</td>
+        <td class="num">${t.n} <span class="ph">占位</span></td>
+        <td style="font-size:12px;color:var(--muted)">${t.k==="hypo"?"（无实测来源）":"_l2_run_20261022T001002Z.log :65"}</td>
+        <td><span class="status ${t.k==="hypo"?"insufficient":"pass"}">${t.k==="hypo"?"证据不足":"通过"}</span></td>
+      </tr>`).join("")}</tbody></table></div>`;
+    document.getElementById("dual-slot").innerHTML = dualKTable();
+  } else {
+    document.getElementById("dual-slot").innerHTML = dualCards();
+  }
+
+  document.getElementById("status-slot").innerHTML =
+    `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      ${STATUSES.map(s=>`<span class="status ${s[0]}">${s[1]}</span>`).join("")}
+      <span style="font-size:12px;color:var(--muted)">规范原文只说 通过/不通过/证据不足 三态；「不适用」是第四种，需要你确认是否允许</span>
+    </div>`;
+
+  const names = {A:"卡片流 · 色带+角标+tooltip", B:"看板 · 图案+常驻图例侧栏", C:"表格 · 可打印/色盲友好"};
+  document.getElementById("lbl").textContent = `${variant} (${names[variant]})`;
+}
+function dualCards(){
+  const d=(o,side)=>`<div class="d" style="${side==="runbook"?"border-style:dashed":""}">
+      <div class="v tier-${o.tier} tip" data-tip="${o.tip}">${o.v}</div>
+      <div class="cap">${side==="runbook"?"runbook 回放层（不是实测）":"最近 30 天实测（当前现实的读数）"}</div>
+      <div class="win">${o.win}</div></div>`;
+  return d(CARRIED.runbook,"runbook") + d(CARRIED.measured,"measured");
+}
+function dualKTable(){
+  return `<div class="tablewrap"><table><thead><tr><th>口径</th><th>年化</th><th>窗口</th><th>档位</th></tr></thead><tbody>
+    <tr class="infer"><td><span class="pfx">[推断]</span> runbook 回放层</td><td class="num">3.6%/年</td><td>全历史回放</td><td>数据推断</td></tr>
+    <tr class="fact"><td><span class="pfx">[事实]</span> 资金费实测</td><td class="num">1.8–2.1%/年</td><td>最近 30 天</td><td>已发生事实</td></tr>
+  </tbody></table></div>`;
+}
+
+/* 切换（URL 参数 + ← → 键）---------------------------------------------- */
+const ORDER=["A","B","C"];
+function cur(){ const m=new URLSearchParams(location.search).get("variant"); return ORDER.includes(m)?m:"A"; }
+function go(v){ const u=new URL(location.href); u.searchParams.set("variant",v); location.href=u.toString(); }
+document.getElementById("prev").onclick=()=>go(ORDER[(ORDER.indexOf(cur())+ORDER.length-1)%ORDER.length]);
+document.getElementById("next").onclick=()=>go(ORDER[(ORDER.indexOf(cur())+1)%ORDER.length]);
+addEventListener("keydown",e=>{
+  const t=e.target.tagName; if(t==="INPUT"||t==="TEXTAREA"||e.target.isContentEditable) return;
+  if(e.key==="ArrowLeft") document.getElementById("prev").click();
+  if(e.key==="ArrowRight") document.getElementById("next").click();
+});
+/* 提示：file:// 下 searchParams 可用（同页查询串），无需服务器 */
+render(cur());
+</script>
+</body>
+</html>

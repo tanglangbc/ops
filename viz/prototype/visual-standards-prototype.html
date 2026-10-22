@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VS-01 视觉约定原型 · 三档标注 / carry 双数 / 数据缺口（占位）</title>
+<!--
+  ============================================================================
+  这是「视觉约定样张」，不是图表产出。
+  - 全部数字为占位假数，页面上逐处带「占位」标记，不得引用、不得登记。
+  - 依 VS-01 §4.1「不许手画」：本件不算任何研究成果图表；真实图表仍须由脚本
+    从冻结数据生成并登记脚本路径+哈希。
+  - 本文件零外部请求（无 CDN、无 fetch、无字体外链），双击 file:// 可直接打开。
+  - 依据：research/VS_01_可视化规范.md（§3 三档 / §4 五条硬禁令 / §5 元数据条 /
+    §6 验收）、viz/DATA_CONTRACT_STANDARD_20261022.md（manifest 封闭字段）、
+    docs/adr/0001-viz-site-architecture.md。
+  ============================================================================
+-->
+<style>
+  :root{
+    /* ---- 档位视觉 token：唯一真源，之后的站点直接移植这一段 ---- */
+    --tier-fact:#1f6feb;        /* 已发生事实：正常色 */
+    --tier-inferred:#b26a00;    /* 数据推断：加「推断」角标 + 斜纹 */
+    --tier-hypothesis:#6e7781;  /* 交易假设：灰显 + 「未验证」 */
+    --tier-gap:#57606a;         /* 核不到：灰块，不留空白 */
+
+    --bg:#ffffff; --panel:#f6f8fa; --panel2:#eef1f4;
+    --line:#d0d7de; --line2:#afb8c1;
+    --fg:#1f2328; --dim:#59636e;
+    --warn:#9a3412; --warn-bg:#fff2e8;
+    --ok:#1a7f37;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.6 "Microsoft YaHei","PingFang SC","Hiragino Sans GB",system-ui,sans-serif;
+  }
+  code,kbd,.mono{font-family:"Cascadia Mono",Consolas,"Courier New",monospace}
+  header.topbar{
+    position:sticky; top:0; z-index:10; padding:10px 22px;
+    background:#fffbe8; border-bottom:2px solid #d4a72c;
+  }
+  header.topbar .stamp{
+    display:inline-block; background:#d4a72c; color:#1f2328; font-weight:700;
+    padding:2px 10px; border-radius:3px; letter-spacing:.5px;
+  }
+  header.topbar h1{font-size:17px; margin:6px 0 2px}
+  header.topbar p{margin:0; color:var(--dim); font-size:12.5px}
+  main{padding:18px 22px 60px; max-width:1180px}
+  section{border:1px solid var(--line); border-radius:8px; margin:0 0 20px; background:var(--panel)}
+  section > h2{
+    font-size:15px; margin:0; padding:10px 14px; border-bottom:1px solid var(--line);
+    background:var(--panel2); border-radius:7px 7px 0 0;
+  }
+  section > h2 .q{color:var(--dim); font-weight:400; font-size:12.5px; margin-left:8px}
+  .pad{padding:14px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media (max-width:900px){ .grid2{grid-template-columns:1fr} }
+  .card{border:1px solid var(--line); border-radius:6px; background:#fff; padding:12px}
+  .card h3{margin:0 0 4px; font-size:13.5px}
+  .card .hint{margin:0 0 10px; font-size:12px; color:var(--dim)}
+  .pick{
+    display:inline-block; font-size:11.5px; font-weight:700; border-radius:3px;
+    padding:1px 7px; margin-right:6px; background:#ddf4ff; color:#0969da; border:1px solid #b6e3ff;
+  }
+  .legend{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 2px; font-size:12px}
+  .chip{border:1px solid var(--line); border-radius:999px; padding:2px 10px; background:#fff; display:inline-flex; align-items:center; gap:6px}
+  .sw{width:12px; height:12px; border-radius:2px; display:inline-block; border:1px solid rgba(0,0,0,.15)}
+  .sw.hatch{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.34) 0 1.6px,transparent 1.6px 5px)}
+  .sw.dash{border:1.5px dashed var(--tier-hypothesis); background:rgba(110,119,129,.18)}
+  .ph{
+    display:inline-block; font-size:10px; font-weight:700; line-height:1.35;
+    padding:0 4px; border-radius:2px; background:#fdecc8; color:#8a5a00;
+    border:1px solid #e3c26a; vertical-align:1px; margin-left:3px;
+  }
+  table{border-collapse:collapse; width:100%; font-size:12.5px}
+  th,td{border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); font-weight:700; white-space:nowrap}
+  .meta1{
+    border:1px solid var(--line); border-left:4px solid #8250df; border-radius:4px;
+    background:#fff; padding:7px 10px; font-size:12px; display:flex; flex-wrap:wrap; gap:4px 14px;
+    align-items:baseline;
+  }
+  .meta1 b{color:#8250df; font-weight:700}
+  .meta2 td:first-child{width:88px; background:var(--panel2); font-weight:700}
+  .forbidden{border:1px solid #ffc9c9; border-left:4px solid #cf222e; background:#fff5f5; border-radius:4px; padding:10px 12px}
+  .forbidden .x{color:#cf222e; font-weight:700}
+  .ok-line{border-left:4px solid var(--ok); background:#f0fff4; border-radius:4px; padding:8px 12px; font-size:12.5px}
+  .warn-line{border-left:4px solid #d4a72c; background:#fffbe8; border-radius:4px; padding:8px 12px; font-size:12.5px}
+  ul.tight{margin:6px 0 0; padding-left:20px}
+  ul.tight li{margin:3px 0}
+  .carry{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .carry .num{font-size:30px; font-weight:800; letter-spacing:-.5px; line-height:1.1; margin:2px 0 2px}
+  .carry .cap{font-size:11.5px; color:var(--dim)}
+  .carry .box{border:1px solid var(--line); border-radius:6px; padding:12px; background:#fff}
+  .carry .box.hypo{border:1.5px dashed var(--tier-hypothesis); background:#fafbfc}
+  .carry .box.hypo .num{color:var(--tier-hypothesis)}
+  .carry .box.inf{border-left:5px solid var(--tier-inferred)}
+  .carry .box.inf .num{color:var(--tier-inferred)}
+  .kv{font-size:12px; margin-top:8px; border-top:1px dashed var(--line); padding-top:6px}
+  .kv div{display:flex; gap:8px; margin:2px 0}
+  .kv span:first-child{color:var(--dim); min-width:64px; flex:0 0 auto}
+  .foot{padding:14px 22px 40px; color:var(--dim); font-size:12px; max-width:1180px}
+  .foot code{background:var(--panel2); padding:1px 5px; border-radius:3px}
+  .tokens{background:#0d1117; color:#e6edf3; border-radius:6px; padding:12px 14px; font-size:12px; overflow-x:auto; white-space:pre}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="stamp">原型 · 全部数字为占位假数</span>
+  <h1>VS-01 视觉约定样张：三档标注 / carry 双数 / 数据缺口 / 元数据条</h1>
+  <p>票 <b>#7「三档标注与 carry 双数的视觉原型」</b> · 依据 VS-01 §3·§4·§5·§6 · 本页零外部请求，双击 <code>file://</code> 即开 · 目的：让你一眼指出「这个我不接受」</p>
+</header>
+
+<main>
+
+<!-- ================= 0. 待你裁决 ================= -->
+<section id="q0">
+  <h2>0. 待你裁决<span class="q">本页只提候选，不替你定；你否掉哪个，就把结论写进架构票</span></h2>
+  <div class="pad">
+    <table>
+      <tr><th style="width:52px">编号</th><th style="width:38%">要定的事</th><th>本页给出的候选</th></tr>
+      <tr><td><b>D1</b></td><td>三档在同一张图里怎么区分</td><td>方案 A（形状/纹理法，色盲也分得开） vs 方案 B（色带+图例法，省空间）</td></tr>
+      <tr><td><b>D2</b></td><td>carry 双数怎么同画</td><td>方案 A（并排双卡，各自带窗口与口径） vs 方案 B（同一横轴刻度带）</td></tr>
+      <tr><td><b>D3</b></td><td>数据缺口怎么显式呈现（§6.4 不静默）</td><td>三态：整段缺失=斜纹灰块 / 单点缺失=空心虚线柱 / 区间未覆盖=虚线边界+灰块</td></tr>
+      <tr><td><b>D4</b></td><td>元数据条版式（§5 五个字段缺一即作废）</td><td>方案 A（单行紧凑条） vs 方案 B（两行键值表）</td></tr>
+      <tr><td><b>D5</b></td><td>carry 两个数各归哪一档</td><td>本页按 §3 推断：runbook 3.6%/年 → <b>交易假设</b>（灰显+未验证）；近 30 天实测 1.8–2.1%/年 → <b>数据推断</b>。**需你确认**，这决定两卡的配色与标签</td></tr>
+      <tr><td><b>D6</b></td><td>状态词表到底是三态还是四态</td><td>VS-01 §3/§4.4 自相矛盾：§4.4 写「四态不得省略」，但只列了 <code>通过/不通过/证据不足</code> 三个。按 §7 属口径不一致，**需报裁决**，本页不自行定</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 1. 三档标注 ================= -->
+<section id="t1">
+  <h2>1. 同一张图里三档如何区分<span class="q">VS-01 §3：视觉上必须可区分、不能混画</span></h2>
+  <div class="pad">
+    <div class="legend">
+      <span class="chip"><span class="sw" style="background:var(--tier-fact)"></span>已发生事实（正常色）</span>
+      <span class="chip"><span class="sw hatch" style="background:var(--tier-inferred)"></span>数据推断（斜纹 + 「推断」角标）</span>
+      <span class="chip"><span class="sw dash"></span>交易假设（灰显 + 「未验证」）</span>
+      <span class="chip"><span class="sw hatch" style="background:var(--tier-gap)"></span>核不到（灰块，不留空）</span>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 A · 形状 / 纹理法</h3>
+        <p class="hint">不靠颜色单独承载档位：推断加斜纹、假设加虚线描边+降不透明度。色盲与黑白打印下仍可区分。</p>
+        <div id="chartA"></div>
+      </div>
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 B · 色带 / 图例法</h3>
+        <p class="hint">三档同形同色，靠柱底 6px 档位色带 + 每柱下方档位字区分。省空间，但**必须**强制图例，且色盲需额外图案。</p>
+        <div id="chartB"></div>
+      </div>
+    </div>
+
+    <div class="warn-line" style="margin-top:12px">
+      <b>要你表态的点</b>：A 的斜纹在小尺寸柱上会不会太碎？B 的「同形同色」是否已经踩到 §3「不能混画」的红线？
+      两案都不能接受的话，请指出你要的第三种（例如：只在**图例与坐标轴**上标档位、图上不混画，即一图一档、三档拆三张）。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. carry 双数 ================= -->
+<section id="t2">
+  <h2>2. carry 必须双数同画<span class="q">VS-01 §3：只画 3.6% 就是禁止项</span></h2>
+  <div class="pad">
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 A · 并排双卡</h3>
+        <p class="hint">两个数各自成卡，各带「窗口 + 口径 + 档位」；差异不做减法，只并置。</p>
+        <div class="carry">
+          <div class="box hypo">
+            <div class="cap">runbook 口径<span class="ph">占位</span></div>
+            <div class="num">3.6%<span class="ph">占位</span><span style="font-size:14px">/年</span></div>
+            <div class="cap" style="color:var(--tier-hypothesis); font-weight:700">交易假设 · 未验证</div>
+            <div class="kv">
+              <div><span>窗口</span><span>runbook 基准窗口（占位：2026-09-30 冻结版）</span></div>
+              <div><span>口径</span><span>资金费按 3 次/日 × 365 折算<span class="ph">占位</span></span></div>
+              <div><span>来源</span><span class="mono">carry_models.json#runbook<span class="ph">占位</span></span></div>
+            </div>
+          </div>
+          <div class="box inf">
+            <div class="cap">近 30 天实测<span class="ph">占位</span></div>
+            <div class="num">1.8–2.1%<span class="ph">占位</span><span style="font-size:14px">/年</span></div>
+            <div class="cap" style="color:var(--tier-inferred); font-weight:700">数据推断 · 推断</div>
+            <div class="kv">
+              <div><span>窗口</span><span>近 30 天（占位：2026-09-22 ~ 2026-10-21）</span></div>
+              <div><span>口径</span><span>同口径折算，按实测逐日聚合<span class="ph">占位</span></span></div>
+              <div><span>来源</span><span class="mono">*_funding.csv 聚合<span class="ph">占位</span></span></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint" style="margin:10px 0 0">两卡之间<b>不加「差多少个百分点」</b>：那是渲染器二次计算，被契约 §3.6「渲染器不得另算」挡住。要差异只能由 manifest 侧先算好。</p>
+      </div>
+
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 B · 同一横轴刻度带</h3>
+        <p class="hint">一根 0–5%/年 的横轴：假设档画成刻度标记，推断档画成区间带，各自贴窗口与口径。</p>
+        <div id="carryScale"></div>
+        <div class="kv" style="font-size:11.5px">
+          <div><span>假设档</span><span>标记点，实心三角，灰色虚线引线</span></div>
+          <div><span>推断档</span><span>区间带（两端点即 min/max），斜纹琥珀色</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="forbidden" style="margin-top:12px">
+      <span class="x">反例（禁止）</span>：一张图只留 <b>3.6%/年</b>，把 runbook 数当成「当前现实」。
+      <div style="margin-top:8px; text-align:center; border:1px dashed #cf222e; border-radius:4px; padding:14px; background:#fff">
+        <div style="font-size:26px; font-weight:800; color:#cf222e">3.6%<span class="ph">占位</span>/年</div>
+        <div style="font-size:11.5px; color:#cf222e; margin-top:4px">只画一个 → 作废（VS-01 §3 明文禁止）</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. 数据缺口 ================= -->
+<section id="t3">
+  <h2>3. 数据缺口必须显式可见<span class="q">VS-01 §6.4 不静默：缺口要在图上标出，不得留空</span></h2>
+  <div class="pad">
+    <div class="grid2">
+      <div class="card">
+        <h3>三态缺口（建议同时固化这三条）</h3>
+        <div id="gapChart"></div>
+        <table style="margin-top:10px">
+          <tr><th>情形</th><th>画法</th><th>文字</th></tr>
+          <tr><td>整段缺失（连续 N 天无记录）</td><td>斜纹灰块占满该 x 位置全高</td><td>「核不到」+「缺 N 天」<span class="ph">占位</span></td></tr>
+          <tr><td>单点缺失</td><td>空心虚线柱 + 不连线</td><td>「核不到」</td></tr>
+          <tr><td>窗口未覆盖（超出数据 coverage.end）</td><td>右端虚线边界 + 灰块</td><td>「核不到（数据只到 X）」</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>反例（禁止）</h3>
+        <p class="hint">下面这张把缺口留成空白。看的人会以为「本来就该是平的 / 没算这条」，而不是「数据没有」。</p>
+        <div class="forbidden">
+          <div id="badGapChart"></div>
+          <div style="margin-top:8px; font-size:12px"><span class="x">禁止</span>：留空 = 静默。§6.4 要求缺口显式标出。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4. 元数据条 ================= -->
+<section id="t4">
+  <h2>4. 每张图必须带的元数据条<span class="q">VS-01 §5：五个字段缺一即作废</span></h2>
+  <div class="pad">
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 A · 单行紧凑条</h3>
+        <p class="hint">占高最少，适合每页多图；缺点是「时间两个」容易挤成一团。</p>
+        <div class="meta1">
+          <span><b>[来源]</b> <span class="mono">BTCUSDT_funding.csv L1240</span><span class="ph">占位</span></span>
+          <span><b>[实验编号]</b> EXP-CARRY-003<span class="ph">占位</span></span>
+          <span><b>[口径]</b> 资金费 3 次/日 × 365<span class="ph">占位</span></span>
+          <span><b>[时间]</b> 生成 2026-10-22 16:05 CST<span class="ph">占位</span> ｜ 数据截止 2026-10-21 08:00 CST<span class="ph">占位</span></span>
+          <span><b>[档位]</b> 数据推断</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3><span class="pick">候选</span>方案 B · 两行键值表</h3>
+        <p class="hint">五字段各占一行，「时间两个」强制拆开，机器也好校验；缺点是占高。</p>
+        <table class="meta2">
+          <tr><td>[来源]</td><td class="mono">BTCUSDT_funding.csv L1240<span class="ph">占位</span></td></tr>
+          <tr><td>[实验编号]</td><td class="mono">EXP-CARRY-003<span class="ph">占位</span></td></tr>
+          <tr><td>[口径]</td><td>资金费 3 次/日 × 365 折算<span class="ph">占位</span></td></tr>
+          <tr><td>[时间·生成]</td><td>2026-10-22 16:05 CST<span class="ph">占位</span></td></tr>
+          <tr><td>[时间·截止]</td><td>2026-10-21 08:00 CST<span class="ph">占位</span></td></tr>
+          <tr><td>[档位]</td><td><b>数据推断</b><span class="ph">占位</span></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="ok-line" style="margin-top:12px">
+      <b>两案都建议加的机器校验</b>：元数据条的 <code>[档位]</code> 必须与图上实际用色一致（图上出现斜纹/角标 ⇒ 档位必须是「数据推断」，否则出图即失败）。这条可做成构建期断言。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5. token ================= -->
+<section id="t5">
+  <h2>5. 可移植的视觉 token<span class="q">定案后由 #3 架构票搬进站点，本页只给候选值</span></h2>
+  <div class="pad">
+    <div class="tokens">/* 档位视觉 token（候选，待你裁决后冻结） */
+:root{
+  --tier-fact:       #1f6feb;  /* 已发生事实：正常色，实心 */
+  --tier-inferred:   #b26a00;  /* 数据推断：斜纹 + 「推断」角标 */
+  --tier-hypothesis: #6e7781;  /* 交易假设：灰显 + 虚线描边 + 「未验证」 */
+  --tier-gap:        #57606a;  /* 核不到：斜纹灰块，文字居中，不留空 */
+}
+/* 硬规则（建议写成构建期断言，不靠人眼） */
+/* R1 每图必有元数据条五字段，缺一即失败 */
+/* R2 元数据[档位] 与图上档位纹样必须一致 */
+/* R3 出现 chart_type=line 且含 carry 对象时，必须同时携带两个窗口的序列 */
+/* R4 任何图出现「未验证」以外的假设态样式 → 失败 */</div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div><b>本页自检</b>：零外部请求（无 CDN / 无 <code>fetch</code> / 无外链字体）；全部数字带「占位」标记；不出现 §4.3 所列字样；不出现 §4.5 所列内容；状态用词仅 <code>通过 / 不通过 / 证据不足</code>。</div>
+  <div style="margin-top:6px"><b>非图表产出声明</b>：本件是视觉约定样张，不构成 VS-01 §2 任何对象的图表；按 §4.1，真实图表仍须脚本从冻结数据生成并登记脚本路径 + 哈希。</div>
+  <div style="margin-top:6px"><b>文件</b>：<code>D:\ops\viz\prototype\visual-standards-prototype.html</code>（单文件，可拷走双击打开）</div>
+</footer>
+
+<script>
+/* ---------------- 占位数据（全部为假数，仅示形态） ---------------- */
+const TIER = {
+  fact:      { color:'#1f6feb', name:'已发生事实', tag:'' },
+  inferred:  { color:'#b26a00', name:'数据推断',   tag:'推断' },
+  hypothesis:{ color:'#6e7781', name:'交易假设',   tag:'未验证' },
+  gap:       { color:'#57606a', name:'核不到',     tag:'核不到' }
+};
+const SERIES = [
+  { x:'2026-05', v:62, tier:'fact' },
+  { x:'2026-06', v:48, tier:'fact' },
+  { x:'2026-07', v:71, tier:'inferred' },
+  { x:'2026-08', v:null, tier:'gap', gapText:'缺 14 天' },
+  { x:'2026-09', v:88, tier:'hypothesis' },
+  { x:'2026-10', v:55, tier:'inferred' }
+];
+
+const W=620, H=250, X0=56, X1=606, Y0=28, Y1=196, MAXV=100;
+const plotH = Y1 - Y0;
+const slotW = (X1 - X0) / SERIES.length;
+const cx = i => X0 + slotW*(i+0.5);
+const sy = v => Y1 - plotH*(v/MAXV);
+const pHtml = '<span class="ph">占位</span>';
+
+function defs(){
+  return `<defs>
+    <pattern id="hp-inf" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#f0a63a"></rect>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#8a5200" stroke-width="2.6"></line>
+    </pattern>
+    <pattern id="hp-gap" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#8a939c"></rect>
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#3d444b" stroke-width="2.6"></line>
+    </pattern>
+  </defs>`;
+}
+function grid(){
+  let s = '';
+  [0,25,50,75,100].forEach(v=>{
+    const y = sy(v);
+    s += `<line x1="${X0}" y1="${y}" x2="${X1}" y2="${y}" stroke="#e4e8ec" stroke-width="1"></line>`;
+    s += `<text x="${X0-8}" y="${y+3.5}" font-size="10" fill="#59636e" text-anchor="end">${v}</text>`;
+  });
+  s += `<line x1="${X0}" y1="${Y1}" x2="${X1}" y2="${Y1}" stroke="#afb8c1" stroke-width="1.2"></line>`;
+  return s;
+}
+function xlabels(){
+  return SERIES.map((d,i)=>
+    `<text x="${cx(i)}" y="${Y1+16}" font-size="10.5" fill="#59636e" text-anchor="middle">${d.x}</text>`
+  ).join('');
+}
+
+/* ---- 方案 A：形状/纹理法 ---- */
+function renderA(){
+  const bw = Math.min(48, slotW*0.56);
+  let s = defs() + grid() + xlabels();
+  SERIES.forEach((d,i)=>{
+    const c = cx(i), x = c - bw/2;
+    if(d.tier === 'gap'){
+      s += `<rect x="${x}" y="${Y0}" width="${bw}" height="${plotH}" fill="url(#hp-gap)" stroke="#3d444b" stroke-width="1"></rect>`;
+      s += `<text x="${c}" y="${Y0+plotH/2-4}" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">核不到</text>`;
+      s += `<text x="${c}" y="${Y0+plotH/2+12}" font-size="10" fill="#eef1f4" text-anchor="middle">${d.gapText}${pHtml ? '' : ''}</text>`;
+      s += `<text x="${c}" y="${Y1+31}" font-size="9.5" fill="#57606a" text-anchor="middle">缺 N 天（占位）</text>`;
+      return;
+    }
+    const y = sy(d.v), h = Y1 - y;
+    if(d.tier === 'fact'){
+      s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${TIER.fact.color}" rx="2"></rect>`;
+    } else if(d.tier === 'inferred'){
+      s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="url(#hp-inf)" stroke="#8a5200" stroke-width="1" rx="2"></rect>`;
+      s += `<rect x="${x+bw-30}" y="${y-4}" width="30" height="14" rx="3" fill="#b26a00"></rect>`;
+      s += `<text x="${x+bw-15}" y="${y+6.5}" font-size="9.5" font-weight="700" fill="#ffffff" text-anchor="middle">推断</text>`;
+    } else { /* hypothesis */
+      s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="#6e7781" fill-opacity="0.22" rx="2"></rect>`;
+      s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="none" stroke="#6e7781" stroke-width="1.6" stroke-dasharray="5 3" rx="2"></rect>`;
+      s += `<text x="${c}" y="${y+h/2+4}" font-size="10.5" font-weight="700" fill="#6e7781" text-anchor="middle">未验证</text>`;
+    }
+    const lab = d.tier === 'hypothesis'
+      ? `<text x="${c}" y="${y-8}" font-size="10" fill="#6e7781" text-anchor="middle">${d.v} 占位</text>`
+      : `<text x="${c}" y="${y-8}" font-size="10.5" font-weight="700" fill="#1f2328" text-anchor="middle">${d.v} 占位</text>`;
+    s += lab;
+  });
+  s += `<text x="${X0-8}" y="${Y0-10}" font-size="10" fill="#59636e" text-anchor="end">口径 \\ 占位</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="250" role="img" aria-label="三档标注方案A：形状纹理法（占位数据）">${s}</svg>`;
+}
+
+/* ---- 方案 B：色带/图例法 ---- */
+function renderB(){
+  const bw = Math.min(48, slotW*0.56);
+  let s = defs() + grid() + xlabels();
+  SERIES.forEach((d,i)=>{
+    const c = cx(i), x = c - bw/2;
+    if(d.tier === 'gap'){
+      s += `<rect x="${x}" y="${Y0}" width="${bw}" height="${plotH}" fill="url(#hp-gap)" stroke="#3d444b" stroke-width="1"></rect>`;
+      s += `<text x="${c}" y="${Y0+plotH/2}" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">核不到</text>`;
+      s += `<text x="${c}" y="${Y1+31}" font-size="9.5" fill="#57606a" text-anchor="middle">缺 N 天（占位）</text>`;
+      return;
+    }
+    const y = sy(d.v), h = Y1 - y;
+    const op = d.tier === 'hypothesis' ? 0.55 : 1;
+    s += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="#495057" fill-opacity="${op}" rx="2"></rect>`;
+    /* 柱底档位色带 */
+    s += `<rect x="${x}" y="${Y1-6}" width="${bw}" height="6" fill="${TIER[d.tier].color}" rx="1"></rect>`;
+    /* 档位字在柱下 */
+    const short = d.tier === 'fact' ? '事实' : (d.tier === 'inferred' ? '推断' : '假设');
+    s += `<text x="${c}" y="${Y1+30}" font-size="10" font-weight="700" fill="${TIER[d.tier].color}" text-anchor="middle">${short}</text>`;
+    s += `<text x="${c}" y="${y-8}" font-size="10.5" font-weight="700" fill="#1f2328" text-anchor="middle">${d.v} 占位</text>`;
+  });
+  s += `<text x="${X0-8}" y="${Y0-10}" font-size="10" fill="#59636e" text-anchor="end">口径 \\ 占位</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="250" role="img" aria-label="三档标注方案B：色带图例法（占位数据）">${s}</svg>`;
+}
+
+/* ---- carry 刻度带（方案 B） ---- */
+function renderCarryScale(){
+  const w=620, h=150, x0=70, x1=590, y=74;
+  const sx = v => x0 + (x1-x0)*(v/5);   /* 0..5 %/年 */
+  let s = defs();
+  /* 轴 */
+  s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#afb8c1" stroke-width="1.4"></line>`;
+  for(let v=0; v<=5; v++){
+    s += `<line x1="${sx(v)}" y1="${y}" x2="${sx(v)}" y2="${y+6}" stroke="#afb8c1" stroke-width="1"></line>`;
+    s += `<text x="${sx(v)}" y="${y+20}" font-size="10.5" fill="#59636e" text-anchor="middle">${v}%</text>`;
+  }
+  s += `<text x="${(x0+x1)/2}" y="${y+38}" font-size="10.5" fill="#59636e" text-anchor="middle">年化折算口径（占位）· %/年</text>`;
+  /* 推断区间带 1.8 ~ 2.1 */
+  const bA=sx(1.8), bB=sx(2.1);
+  s += `<rect x="${bA}" y="${y-26}" width="${bB-bA}" height="26" fill="url(#hp-inf)" stroke="#8a5200" stroke-width="1" rx="3"></rect>`;
+  s += `<rect x="${bA}" y="${y-26}" width="${bB-bA}" height="26" fill="none" stroke="#b26a00" stroke-width="1.4" rx="3"></rect>`;
+  s += `<rect x="${bA-6}" y="${y-38}" width="112" height="15" rx="3" fill="#b26a00"></rect>`;
+  s += `<text x="${bA+50}" y="${y-27.5}" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">数据推断 · 推断</text>`;
+  s += `<text x="${bA}" y="${y+62}" font-size="10.5" fill="#b26a00" text-anchor="middle">1.8% 占位</text>`;
+  s += `<text x="${bB}" y="${y+62}" font-size="10.5" fill="#b26a00" text-anchor="middle">2.1% 占位</text>`;
+  s += `<text x="${(bA+bB)/2}" y="${y+78}" font-size="10.5" fill="#59636e" text-anchor="middle">近 30 天（占位：09-22 ~ 10-21）</text>`;
+  /* 假设标记 3.6 */
+  const p=sx(3.6);
+  s += `<line x1="${p}" y1="${y-52}" x2="${p}" y2="${y}" stroke="#6e7781" stroke-width="1.4" stroke-dasharray="4 3"></line>`;
+  s += `<polygon points="${p},${y} ${p-6},${y-11} ${p+6},${y-11}" fill="#6e7781"></polygon>`;
+  s += `<text x="${p}" y="${y-58}" font-size="11.5" font-weight="700" fill="#6e7781" text-anchor="middle">3.6% 占位</text>`;
+  s += `<text x="${p}" y="${y-72}" font-size="10" fill="#6e7781" text-anchor="middle">交易假设 · 未验证</text>`;
+  s += `<text x="${p}" y="${y+76}" font-size="10.5" fill="#59636e" text-anchor="middle">runbook 基准窗口（占位）</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="150" role="img" aria-label="carry 双数同画方案B：同一横轴刻度带（占位数据）">${s}</svg>`;
+}
+
+/* ---- 缺口三态 ---- */
+function renderGap(){
+  const w=620,h=200, x0=40, y1=160, y0=24;
+  const slots=3, sw=(620-80)/slots, sx=i=>x0+sw*(i+0.5);
+  let s=defs();
+  s += `<line x1="${x0+10}" y1="${y1}" x2="${600}" y2="${y1}" stroke="#afb8c1" stroke-width="1.2"></line>`;
+  const bwd=52;
+  /* G1 整段缺失 */
+  let c=sx(0), x=c-bwd/2;
+  s += `<rect x="${x}" y="${y0+20}" width="${bwd}" height="${y1-y0-20}" fill="url(#hp-gap)" stroke="#3d444b" rx="2"></rect>`;
+  s += `<text x="${c}" y="${y1-56}" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">核不到</text>`;
+  s += `<text x="${c}" y="${y1-40}" font-size="10" fill="#eef1f4" text-anchor="middle">缺 14 天（占位）</text>`;
+  s += `<text x="${c}" y="${y1+18}" font-size="11" font-weight="700" fill="#1f2328" text-anchor="middle">G1 整段缺失</text>`;
+  s += `<text x="${c}" y="${y1+33}" font-size="9.5" fill="#59636e" text-anchor="middle">斜纹灰块占满</text>`;
+  /* G2 单点缺失 */
+  c=sx(1); x=c-bwd/2;
+  s += `<rect x="${x}" y="${y0+52}" width="${bwd}" height="${y1-y0-52}" fill="none" stroke="#57606a" stroke-width="1.6" stroke-dasharray="5 3" rx="2"></rect>`;
+  s += `<text x="${c}" y="${y1-34}" font-size="11.5" font-weight="700" fill="#57606a" text-anchor="middle">核不到</text>`;
+  s += `<text x="${c}" y="${y1+18}" font-size="11" font-weight="700" fill="#1f2328" text-anchor="middle">G2 单点缺失</text>`;
+  s += `<text x="${c}" y="${y1+33}" font-size="9.5" fill="#59636e" text-anchor="middle">空心虚线柱，不连线</text>`;
+  /* G3 区间未覆盖 */
+  c=sx(2); x=c-bwd/2;
+  s += `<rect x="${x}" y="${y0+20}" width="${bwd}" height="${y1-y0-20}" fill="#8a939c" fill-opacity="0.18" rx="2"></rect>`;
+  s += `<line x1="${x+bwd}" y1="${y0+12}" x2="${x+bwd}" y2="${y1}" stroke="#3d444b" stroke-width="1.8" stroke-dasharray="6 4"></line>`;
+  s += `<text x="${c}" y="${y1-52}" font-size="12" font-weight="700" fill="#3d444b" text-anchor="middle">核不到</text>`;
+  s += `<text x="${c}" y="${y1-36}" font-size="9.5" fill="#3d444b" text-anchor="middle">数据只到 10-21（占位）</text>`;
+  s += `<text x="${c}" y="${y1+18}" font-size="11" font-weight="700" fill="#1f2328" text-anchor="middle">G3 区间未覆盖</text>`;
+  s += `<text x="${c}" y="${y1+33}" font-size="9.5" fill="#59636e" text-anchor="middle">虚线边界 + 灰块</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="200" role="img" aria-label="数据缺口三态（占位数据）">${s}</svg>`;
+}
+
+/* ---- 反例：留空 ---- */
+function renderBadGap(){
+  const w=620,h=180, x0=40,y1=140,y0=20;
+  const slots=3, sw=(620-80)/slots, sx=i=>x0+sw*(i+0.5);
+  let s=defs();
+  s += `<line x1="${x0+10}" y1="${y1}" x2="${600}" y2="${y1}" stroke="#afb8c1" stroke-width="1.2"></line>`;
+  const bw=52;
+  [0,2].forEach(i=>{
+    const c=sx(i), x=c-bw/2, hgt=70;
+    s += `<rect x="${x}" y="${y1-hgt}" width="${bw}" height="${hgt}" fill="#495057" fill-opacity="0.5" rx="2"></rect>`;
+  });
+  const c=sx(1);
+  s += `<text x="${c}" y="${y1-10}" font-size="11" fill="#cf222e" text-anchor="middle">（空白）</text>`;
+  s += `<text x="${c}" y="${y1+20}" font-size="11" font-weight="700" fill="#cf222e" text-anchor="middle">第 2 段留空 → 静默</text>`;
+  s += `<text x="${c}" y="${y1+35}" font-size="9.5" fill="#cf222e" text-anchor="middle">看的人以为「没这条」而不是「数据没有」</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="180" role="img" aria-label="反例：缺口留空（占位数据）">${s}</svg>`;
+}
+
+document.getElementById('chartA').innerHTML = renderA();
+document.getElementById('chartB').innerHTML = renderB();
+document.getElementById('carryScale').innerHTML = renderCarryScale();
+document.getElementById('gapChart').innerHTML = renderGap();
+document.getElementById('badGapChart').innerHTML = renderBadGap();
+</script>
+</body>
+</html>
