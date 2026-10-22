@@ -1,0 +1,82 @@
+/* 视觉 token 的唯一真源在 docs/visual-standards.md §2（本段直接移植，勿在此另立口径） */
+:root{
+  --tier-fact:#1f6feb;
+  --tier-inferred:#b26a00;
+  --tier-hypothesis:#6e7781;
+  --tier-gap:#57606a;
+  --stale:#b91c1c;
+  --bg:#f6f8fb; --card:#fff; --line:#e3e7ee; --ink:#12161c; --muted:#6b7280;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+a{color:#0b62d0}
+header.top{background:#111827;color:#fff;padding:10px 18px}
+header.top .row{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+header.top h1{font-size:15px;margin:0;font-weight:600}
+header.top .meta{color:#9ca3af;font-size:12px}
+nav.crumbs{margin-top:6px;font-size:12px;color:#9ca3af}
+nav.crumbs a{color:#d1d5db}
+
+/* #9：页面级陈旧（36h）；与图级「核不到」语义不同，严禁合并 */
+.stale-bar{background:var(--stale);color:#fff;padding:8px 18px;font-size:13px}
+.stale-bar b{font-weight:700}
+
+.wrap{padding:18px;max-width:1180px;margin:0 auto}
+.grid{display:grid;gap:14px}
+.grid.idx{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h2{margin:0 0 4px;font-size:15px}
+.card h3{margin:0 0 8px;font-size:14px}
+.objtitle{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.objtitle .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+/* VS-01 §5：每图必备元数据条六项 */
+.metabar{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+.metabar span{font-family:var(--mono);font-size:11px;background:#f1f5f9;border:1px solid var(--line);
+  border-radius:5px;padding:1px 6px;color:#334155}
+.metabar span.k{font-weight:600;background:#e2e8f0;color:#0f172a}
+
+/* 三档：不依赖颜色（实线 / 斜纹 / 点线），见 docs/visual-standards.md §1 */
+.tier{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.tier-fact{border:2px solid var(--tier-fact)}
+.tier-infer{border:2px dashed var(--tier-inferred);
+  background:repeating-linear-gradient(135deg,#fff,#fff 10px,#fff7ed 10px,#fff7ed 20px)}
+.tier-hypo{border:2px dotted var(--tier-hypothesis);color:#4b5563;
+  background:repeating-linear-gradient(0deg,#fff,#fff 6px,#f3f4f6 6px,#f3f4f6 12px)}
+.badge{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid;white-space:nowrap}
+.badge.fact{color:var(--tier-fact);border-color:var(--tier-fact)}
+.badge.infer{color:var(--tier-inferred);border-color:var(--tier-inferred)}
+.badge.hypo{color:var(--tier-hypothesis);border-color:var(--tier-hypothesis)}
+.status{font-size:11px;border-radius:5px;padding:1px 8px;font-weight:600}
+.status.pass{background:#dcfce7;color:#166534}
+.status.fail{background:#fee2e2;color:#991b1b}
+.status.insufficient{background:#fef3c7;color:#92400e}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin:0 0 12px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;background:#fbfcfe}
+.legend .sw{display:inline-block;width:22px;height:14px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+.legend .sw.fact{border:2px solid var(--tier-fact)}
+.legend .sw.infer{border:2px dashed var(--tier-inferred);
+  background:repeating-linear-gradient(135deg,#fff,#fff 4px,#fed7aa 4px,#fed7aa 8px)}
+.legend .sw.hypo{border:2px dotted var(--tier-hypothesis);
+  background:repeating-linear-gradient(0deg,#fff,#fff 3px,#e5e7eb 3px,#e5e7eb 6px)}
+
+.gap{background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 8px,#e5e7eb 8px,#e5e7eb 16px);
+  border:1px dashed #9ca3af;color:#4b5563;border-radius:8px;padding:12px;font-size:12px;margin:8px 0}
+.gap b{display:block;font-size:13px;color:#374151;margin-bottom:2px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:#f8fafc;color:#334155;white-space:nowrap;position:sticky;top:0}
+.tablewrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pos{color:#15803d}.neg{color:#b91c1c}
+.dual{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.dual .d{flex:1;min-width:200px}
+.dual .d .v{font-size:22px;font-weight:700;font-family:var(--mono)}
+.dual .d .cap{font-size:11px;color:var(--muted);margin-top:4px}
+.chart{width:100%;height:300px}
+.kv{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.foot{margin-top:18px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}

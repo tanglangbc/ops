@@ -1,0 +1,24 @@
+{
+  "name": "token-quant-viz-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "代币群研究成果可视化站点（VS-01 呈现层）。每对象一个单文件 HTML，构建期烘焙数据，双击 file:// 可开。",
+  "scripts": {
+    "bake": "node tools/build-data.mjs",
+    "gen:html": "node tools/gen-html.mjs",
+    "dev": "vite",
+    "build": "node tools/build-data.mjs && node tools/gen-html.mjs && node tools/build-all.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.0",
+    "vite": "^8.3.0",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}

@@ -11,6 +11,12 @@
 # 站点构建产物与烘焙中间物（可由 manifest + 脚本重建，见 docs/adr/0001）
 viz/dist/
 viz/.gen/
+viz/node_modules/
+# 生成物（tools/gen-html.mjs 与 tools/build-data.mjs 产出，不入库）
+viz/index.html
+viz/pages/
+viz/src/gen/
+viz/src/entries/
 
 # Python / 测试缓存
 __pycache__/
