@@ -8,7 +8,7 @@
     "bake": "node tools/build-data.mjs",
     "gen:html": "node tools/gen-html.mjs",
     "dev": "vite",
-    "build": "node tools/build-data.mjs && node tools/gen-html.mjs && node tools/build-all.mjs",
+    "build": "node tools/build.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

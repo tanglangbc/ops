@@ -54,6 +54,34 @@ viz/
 - **缺口显式**：图级「核不到」灰块；页面级陈旧红条（>36h，连续 3 天升级）。
 - 状态只有 **通过 / 不通过 / 证据不足** 三态（用户 2026-10-22 否决第四态）。
 
+## 每日自动构建（计划任务 `\mss002-viz-build`）
+
+```
+任务名     \mss002-viz-build
+触发       每日 09:30（CST）——L2 记录 08:10、采集 09:00，构建排在它俩之后
+命令       "C:\Program Files\nodejs\node.exe" "D:\ops\viz\tools\build.mjs" --root "D:\workspace\代币交流群"
+不依赖 PATH：全部子进程用当前 node 可执行文件 + 本仓 node_modules 里的 vite bin
+状态文件   D:\workspace\代币交流群\binance-spot-quant\reports\_viz_last_status.json
+```
+
+三个任务**互相独立**（`mss002-l2-daily` / `mss002-viz-capture` / `mss002-viz-build`）：
+
+- **构建失败不冒泡到数据链**——它不会影响 L2 记录，也不影响采集；失败只写自己的状态文件并返回非零码。
+- **失败不弄坏用户手上的站点**：一切先建到 `dist.next`，九页自检通过后才原子切到 `dist`，旧的留成 `dist.prev`（一键回滚点）。
+- 站点侧的「陈旧」红条由页面按 manifest 的 `coverage.end` **自行判定**（36h，连续 3 天升级），运行时不读状态文件——`file://` 下读本地文件会被 CORS 拦（见 `docs/research/vite-echarts-offline.md`）。
+
+**失败路径演练**（不碰真实数据）：
+
+```powershell
+node tools/build.mjs --fail-step bake      # 故障注入：bake 判失败 → 退出码 1、状态文件 ok=false、dist 字节不变
+```
+
+**回滚**（摘掉这一步，数据链与采集都不受影响）：
+
+```powershell
+schtasks /delete /tn "\mss002-viz-build" /f
+```
+
 ## 数据从哪来
 
 `D:\workspace\代币交流群\viz\manifests\*.manifest.json`（16 份）+ 它们引用的数据文件。

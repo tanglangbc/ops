@@ -30,7 +30,8 @@ export default defineConfig({
   base: './',
   plugins: [react(), viteSingleFile()],
   build: {
-    outDir: 'dist',
+    // 暂存目录由 build-all.mjs 传进来：先建到 dist.next，自检通过后才切到 dist
+    outDir: process.env.VIZ_OUTDIR || 'dist',
     emptyOutDir: false,
     assetsInlineLimit: 100000000,
     cssCodeSplit: false,
