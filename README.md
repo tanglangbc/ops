@@ -27,3 +27,17 @@ node tools/check.mjs --gate      # 追加 抽数反查 / 字节可复现 / 越�
 ```
 
 确实需要绕过时用 `git commit --no-verify`，并在提交信息里说明原因。
+
+## 复盘：一条命令出会话摘要
+
+`/retro` 要读的是会话日志，而日志是逐条 ndjson + JSON 转义，**用 grep 会把模型自己的叙述当成失败**。
+`tools/session-digest.mjs` 把这件事做对：结构化信号（`isError` / `errorCode`）优先，文本模式只用于分类，
+配对用 `callId`。
+
+```powershell
+node tools/session-digest.mjs              # 最近一次会话：工具调用分布 + 客观失败 + errorCode
+node tools/session-digest.mjs --errors 8   # 失败明细（客观在前，"疑似"单列不混入）
+node tools/session-digest.mjs --all        # 全部会话一览（体积 / 记录数 / 失败数）
+```
+
+三类 session 级坑已记在 `docs/gotchas.md`：G-001 写文件吞反斜杠、G-002 工具面中途会变、G-003 热重载文件的读保护。

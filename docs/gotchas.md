@@ -47,4 +47,31 @@
 
 **怎么验证**
 - 关键不是验证，而是**记录代价**：如果要判断某工具是否还在，调一次看结果；把探测次数控制在 1 次以内（重试 = 纯浪费）。
-- 复盘时用结构化日志计数，不要凭印象：解析 `tool/call` / `tool/result` 记录，按记录序号配对（`tool/result` 常常没有 `time` 字段，用**序号顺序**而不是时间戳）。
+- 复盘时用结构化日志计数，不要凭印象：用 `node tools/session-digest.mjs`。
+  （更正：本会话早前我写的「`tool/result` 常常没有 `time`」**是错的**——实测 399/399 条都带 `time`，
+  且带 `callId`；配对应当用 **`callId`** 精确配对，不要靠序号或时间戳猜。那次误判来自我自己脚本里的一处取值错误。）
+
+---
+
+## G-003 · 改「会被热重载」的文件会撞上读保护（2026-10-22）
+
+**现象**：`edit` 被拒，两种报错：
+
+```
+Error: cannot modify "...": file has not been read — read the file, then retry          (errorCode: FS_NOT_OBSERVED)
+Error: cannot modify "...": file changed since it was read — re-read the file, then retry (errorCode: FS_STALE_VERSION)
+```
+
+**实际咬到**：本次会话各 2 次（`tools/session-digest.mjs --json` 的 `errorCode` 统计直接给出：`FS_NOT_OBSERVED×2`、`FS_STALE_VERSION×2`）。后者全部发生在 **`AGENTS.md`** 上——该文件会被 harness **热重载**（会话里出现过两次 `Updated instructions from: AGENTS.md` 的系统提示），重载后文件版本变了，我紧接着的 `edit` 就被判为「读过的版本已过期」。
+
+**成因**
+- `FS_NOT_OBSERVED`：文件操作策略要求**本次会话内**由 `read` 工具读过目标文件才允许改；上一轮/上一个 checkpoint 里读过**不算**。
+- `FS_STALE_VERSION`：读之后文件被（自己、别的会话、或 harness 的热重载）改动过，缓存版本对不上。
+
+**正确做法**
+1. 改**会被热重载**的文件（`AGENTS.md`、以及任何被其他 agent 共享的文档）前，**先 `read` 再 `edit`**，不要拿记忆里的内容直接改。
+2. 被拒就按提示 **read → 重试**；**不要改用 shell 写文件绕过**——绕过等于放弃版本保护，会踩出更难查的并发覆盖。
+3. 同一个文件要连续改多处时，每处改完最好重读一次；跨 agent 协作时尤其如此。
+
+**怎么验证**
+- `node tools/session-digest.mjs --errors 8`：客观失败里会带 `errorCode`，FS 类问题直接可数。
