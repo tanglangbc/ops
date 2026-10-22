@@ -115,8 +115,11 @@ endSection(`${scanned} 个文本文件无控制字符`)
 
 /* ── ④ 导航指针（AGENTS.md 里反引号包住的仓库路径必须真的存在） ────────── */
 /* 「指向空气的指针」是机械可判的：新会话会照着它去找，找不到就白花一次探索。 */
-console.log('④ 导航指针（AGENTS.md 指向的文件是否存在）')
+/* 同一条检查也挡住另一类腐烂：**把工具名写进 always-loaded 文档**——工具面会随会话变
+   （见 docs/gotchas.md G-002），写死的工具名迟早指向一个不存在的工具。 */
+console.log('④ 导航指针（AGENTS.md 的路径指针必须存在；工具名不写进总是加载的文档）')
 const agentFiles = targets.filter(f => path.basename(f) === 'AGENTS.md')
+const TOOL_SHAPE = /^(mcp__[a-z0-9_]+|[a-z][a-z0-9]*(?:_[a-z0-9]+){1,})$/
 let ptrCount = 0
 for (const f of agentFiles) {
   const abs = path.join(ROOT, f)
@@ -134,8 +137,15 @@ for (const f of agentFiles) {
     ptrCount++
     if (!fs.existsSync(path.join(ROOT, tok))) bad(`${f}: 指针指向不存在的文件 \`${tok}\``)
   }
+  // 工具名（不在仓库里、也不是路径，却长得像工具标识符）
+  for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+    const tok = m[1].trim()
+    if (!TOOL_SHAPE.test(tok)) continue
+    if (fs.existsSync(path.join(ROOT, tok))) continue
+    bad(`${f}: 疑似写死了工具名 \`${tok}\` —— 工具面会变（G-002），改成写「动作」，或写明「以当前菜单为准」`)
+  }
 }
-endSection(`${agentFiles.length} 个 AGENTS.md 的 ${ptrCount} 条路径指针全部存在`)
+endSection(`${agentFiles.length} 个 AGENTS.md 的 ${ptrCount} 条路径指针全部存在，且没有写死工具名`)
 
 /* ── ⑤ 截图体检（目检的机械替代：空白 / 未上色 / 宽度；约 15 s） ───────── */
 if (WANT_SHOTS) {
