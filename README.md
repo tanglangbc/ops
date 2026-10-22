@@ -41,3 +41,31 @@ node tools/session-digest.mjs --all        # 全部会话一览（体积 / 记�
 ```
 
 三类 session 级坑已记在 `docs/gotchas.md`：G-001 写文件吞反斜杠、G-002 工具面中途会变、G-003 热重载文件的读保护。
+
+## 数据根的真源快照（复盘第 6 条）
+
+`D:\workspace\代币交流群` **不是 git 仓**，而台账、决策记录、冻结件、16 份 manifest 全在里面——一次误改就没有回退点。该根整体 **60 MB+**（`reports/` 含大量过程产物），所以不能整目录快照，只快照「真源」。
+
+```powershell
+node tools/snapshot-truth.mjs                     # ① 决策与台账（25 件 / 约 159 KB）
+node tools/snapshot-truth.mjs --with-inputs        # ② 再加 manifest 引用的原始输入（+16 件 / 约 2.1 MB）
+node tools/snapshot-truth.mjs --dry-run             # 只报清单不落盘
+```
+
+- 落点：`<数据根>\_snapshots\<UTC 时刻>\`（保留相对路径 + `SHA256SUMS` + `TRUTH_SET.md`），外加一份 `INDEX.md` 索引；
+- **内容与上一次相同则跳过**——只在真变了才生成新快照，历史表就是「变化日志」，不堆副本；
+- 保留最近 **30** 份，自动裁剪；
+- 计划任务 **`\mss002-truth-snapshot`（每日 09:45）**，排在 L2 记录 08:10 / 采集 09:00 / 构建 09:30 之后；
+- 抽查过：快照里 ledger 的 sha256 与现场文件一致（`3b8ecd0199…`）。
+- 回滚：`schtasks /delete /tn "\mss002-truth-snapshot" /f`，并删掉 `_snapshots/`（两者都不影响数据链）。
+
+**没做的一件事（等你点头）**：`git init` 那个数据根。
+快照给的是「时间点副本 + 完整性证明」，git 才能给 diff 与归因。真要 git 化，建议**只纳入真源集**并配一份 `.gitignore`：
+
+```
+data/            # 5 份资金费 CSV + 日线 CSV ≈ 2 MB（用快照 ② 兜底即可）
+reports/*.csv / *_scratch/ / _quarantine_*/ / _packages/   # 过程产物与 60 MB 的大头
+.vscode/  _snapshots/   # _snapshots 自身不入库（它是快照，不是历史）
+```
+
+体积估计：首次提交约 **0.2 MB**（真源集）。这是一次**结构性改动**（在数据根里放 `.git`），我按纪律先给方案、不动手。
