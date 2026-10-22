@@ -112,9 +112,33 @@ for (const f of targets) {
 }
 endSection(`${scanned} 个文本文件无控制字符`)
 
-/* ── ④ 慢检：verify-gate（仅在 --gate/--full，或 dist 已存在时被显式要求） ─ */
+/* ── ④ 导航指针（AGENTS.md 里反引号包住的仓库路径必须真的存在） ────────── */
+/* 「指向空气的指针」是机械可判的：新会话会照着它去找，找不到就白花一次探索。 */
+console.log('④ 导航指针（AGENTS.md 指向的文件是否存在）')
+const agentFiles = targets.filter(f => path.basename(f) === 'AGENTS.md')
+let ptrCount = 0
+for (const f of agentFiles) {
+  const abs = path.join(ROOT, f)
+  if (!fs.existsSync(abs)) continue
+  const text = fs.readFileSync(abs, 'utf8')
+  const seen = new Set()
+  for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+    const tok = m[1].trim()
+    // 只认「像仓库内路径」的 token：含 / 或以这些后缀结尾；跳过命令、通配、外部路径
+    if (/[<>*?|]/.test(tok) || tok.includes(' ')) continue
+    if (!(tok.includes('/') || /\.(md|mjs|js|json|ps1|py|yml|yaml)$/.test(tok))) continue
+    if (/^[A-Za-z]:/.test(tok) || tok.startsWith('http')) continue
+    if (seen.has(tok)) continue
+    seen.add(tok)
+    ptrCount++
+    if (!fs.existsSync(path.join(ROOT, tok))) bad(`${f}: 指针指向不存在的文件 \`${tok}\``)
+  }
+}
+endSection(`${agentFiles.length} 个 AGENTS.md 的 ${ptrCount} 条路径指针全部存在`)
+
+/* ── ⑤ 慢检：verify-gate（--gate/--full） ─────────────────────────────── */
 if (WANT_GATE) {
-  console.log('④ 结票门 verify-gate（抽数反查 / 字节可复现 / 越界扫描 / 不静默）')
+  console.log('⑤ 结票门 verify-gate（抽数反查 / 字节可复现 / 越界扫描 / 不静默）')
   const gate = path.join(ROOT, 'viz', 'tools', 'verify-gate.mjs')
   const hasDist = fs.existsSync(path.join(ROOT, 'viz', 'dist', 'index.html'))
   const hasDeps = fs.existsSync(path.join(ROOT, 'viz', 'node_modules', 'vite'))

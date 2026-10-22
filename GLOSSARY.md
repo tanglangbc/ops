@@ -1,0 +1,36 @@
+# GLOSSARY
+
+本仓是 **single-context**：所有部分共用一套词汇（约定见 `docs/agents/domain.md`）。
+在 issue 标题、提交信息、文档、代码里**就用这里定义的词**，不要漂到同义词。
+
+> 规范性的细节不在这里重复：视觉与标注细节见 `docs/visual-standards.md`，数据字段契约见
+> `D:\workspace\代币交流群\viz\DATA_CONTRACT_STANDARD_20261022.md`，架构决定见 `docs/adr/`。
+> 本文件只回答「这个词指什么」。
+
+## 数据与台账
+
+- **记录日（record_date）** —— 台账里「这次是在哪一天记的」。与「期望 bar」是两个不同的日期，别混。
+- **期望 bar（expected_bar）** —— 这一条应该记录的、**已收盘**的那根日线（= 记录日 − 1）。闸门按它精确对齐。
+- **闸门（gate）** —— 写入前的判定结果：`RECORDED`（已写入）/ `SKIP_DUPLICATE`（重复，跳过）/ `BACKFILL_RECORDED`（补记）/ `STALE`（期望 bar 未到）。
+- **补记（backfill）** —— 事后补写的历史行，`kind=backfill`，与当日正常记录区分开。
+- **作废（correction）** —— `kind=correction` 的行，用来**作废**已写记录。台账只追加：作废靠追加一条作废行，不删历史行，统计与闸门都排除作废行。
+- **台账（ledger）** —— `binance-spot-quant/reports/L2_FORWARD_LEDGER.jsonl`，一行一条、只追加。
+- **有效行** —— 去掉作废行之后剩下的行。唯一真源是 `l2_invariants.valid_rows()`，别在别处二次实现。
+- **验收器** —— `tools/l2_acceptance_check.py`：只读地判定「本轮是否已发生」，四态 `PASS/FAIL/NOT_YET/UNKNOWN`，**UNKNOWN 不得当通过**。
+
+## 呈现层
+
+- **三档（verdict_layer）** —— `已发生事实` / `数据推断` / `交易假设`。档位必须在图上可区分，且**不依赖颜色**（细节见 `docs/visual-standards.md`）。
+- **核不到** —— 缺口的显式标记：缺什么、缺多少、为什么不画。**不允许用空白假装没算**。
+- **陈旧 / 严重陈旧** —— 页面级：数据超过 **36 小时**未刷新即陈旧，连续 3 天（72 小时）升级为严重陈旧。与「核不到」是两种东西，不许合并。
+- **carry 双数** —— `runbook 回放层` 与 `近 30 天实测` **两个数必须同格同画**，各自带窗口与口径；只画回放层即违规。
+- **回放层（runbook）** —— 由历史数据回放推出来的口径，**不是实测**；它给出的数属于「数据推断」，不是「已发生事实」。
+- **占位** —— 原型里的假数。可以出现在一次性原型里并逐处标记，**不得引用、不得登记为成果**。
+- **manifest** —— 渲染器的唯一输入：一图一份 JSON（`artifact_id` / `sha256` / `coverage` / `verdict_layer` / `status` / `gaps` / `render_hints`）。渲染器**只读 manifest 与其引用的数据文件**，不读 Markdown 正文、不另算统计。
+- **结票门** —— 关票前的四项验收：抽数反查、字节可复现、越界扫描、不静默。实现：`viz/tools/verify-gate.mjs`，入口 `node tools/check.mjs --gate`。
+
+## 研究口径
+
+- **dev / oos** —— 样本内（开发）与样本外（检验）两段。样本外的数才是对未来的检验。
+- **反过拟合** —— 多重比较修正后的门槛（如 Bonferroni 校正的 t 阈值）。单看 `oos_t` 不过门槛即视为噪声。
+- **集中度** —— 少数几笔贡献了全部收益/亏损的程度；集中度不通过时该变体不作为候选。

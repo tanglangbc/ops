@@ -17,6 +17,7 @@ git config core.hooksPath .githooks
 | `node --check` 语法 | `viz/tools/verify-gate.mjs` 里一个多写的逗号，一路带到运行时才炸 |
 | JSON 合法性 | `viz/package.json` 多一个逗号，直到夜间构建演练才发现 |
 | 控制字符扫描 | shell heredoc 吞掉反斜杠，把 ADR 正文写成 `0x0b`（见 `docs/gotchas.md` G-001） |
+| 导航指针 | `AGENTS.md` 指向不存在的 `GLOSSARY.md`（指向空气的指针会白烧一次探索；本仓此后按 `docs/agents/domain.md` 的约定**懒创建**，现已补齐） |
 
 更慢的「结票门」按需跑（约 20–30 s，需 `viz/node_modules` 与 `viz/dist`）：
 
