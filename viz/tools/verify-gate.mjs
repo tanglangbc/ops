@@ -74,7 +74,20 @@ function traceNumbers() {
     {
       name: 'carry-now BTC 30 天年化',
       page: 'pages/carry-now.html',
-      onPage: (t) => (t.match(/BTCUSDT[\s\S]{0,400}?<td class="num (?:pos|neg)">([-\d.]+)<\/td>/) || [])[1],
+      // 按**表头定位列**，不靠「BTCUSDT 之后第一个数字」这类松散正则——
+      // 松散写法会抓到隔壁列（本次就被 2023+ 那列 7.18 骗了一次，报了一次假 FAIL）
+      onPage: (t) => {
+        const thead = (t.match(/<thead>[\s\S]*?<\/thead>/) || [''])[0]
+        const headers = [...thead.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)].map(m => m[1].replace(/<[^>]+>/g, '').trim())
+        for (const r of t.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+          const cells = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(m => m[1].replace(/<[^>]+>/g, '').trim())
+          if (cells[0] !== 'BTCUSDT') continue
+          const idx = headers.findIndex(h => h.includes('30'))
+          if (idx < 0) return undefined
+          return (cells[idx].match(/-?\d+\.\d+/) || [])[0]
+        }
+        return undefined
+      },
       trace: (v) => {
         const p = path.join(ROOT, 'binance-spot-quant/reports/_carry_now_history.jsonl')
         const lines = read(p).split('\n').filter(Boolean)

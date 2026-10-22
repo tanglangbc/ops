@@ -3,13 +3,16 @@
 
 # DSH 会话/面板日志（含对话原文，体积大且含隐私）
 .dsh-ops/
+.playwright-mcp/
 
-# 原型/研究期间的临时实验目录（本次曾达 228 MB）
+# 原型/研究期间的临时实验目录与临时文件（本次曾达 228 MB）
 .tmp-research/
-.tmp-*/
+.tmp-*
 
 # 站点构建产物与烘焙中间物（可由 manifest + 脚本重建，见 docs/adr/0001）
 viz/dist/
+viz/dist.prev/     # build-all 留下的上一版可用产物（回滚点，约 12 MB）
+viz/dist.next/     # 暂存目录：自检通过前不切换
 viz/.gen/
 viz/node_modules/
 # 生成物（tools/gen-html.mjs 与 tools/build-data.mjs 产出，不入库）

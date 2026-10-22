@@ -1,0 +1,23 @@
+#!/bin/sh
+# pre-commit：提交前快检（语法 / JSON / 控制字符），毫秒级。
+# 真正要跑「结票门」时用：node tools/check.mjs --gate
+#
+# 生效方式（一次性）：git config core.hooksPath .githooks
+# 之所以放 .githooks/ 而不是 .git/hooks/：前者随仓库走，别人克隆后一条命令即可启用。
+
+ROOT="$(git rev-parse --show-toplevel)"
+NODE="$(command -v node 2>/dev/null || echo '/c/Program Files/nodejs/node.exe')"
+
+# 只查本次暂存的文件，保持毫秒级
+files="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$files" ] && exit 0
+
+printf '%s\0' $files | xargs -0 "$NODE" "$ROOT/tools/check.mjs"
+code=$?
+if [ $code -ne 0 ]; then
+  echo ""
+  echo "pre-commit: 检查未通过，提交被拦下。"
+  echo "  · 修好再提交；确认是有意为之可用 git commit --no-verify（请说明原因）"
+  exit 1
+fi
+exit 0
