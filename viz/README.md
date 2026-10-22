@@ -82,6 +82,25 @@ node tools/build.mjs --fail-step bake      # 故障注入：bake 判失败 → �
 schtasks /delete /tn "\mss002-viz-build" /f
 ```
 
+## 目检与它的机械替代（重要：别声称做过没做的事）
+
+「好不好看」需要**图像能力**。本仓库的开发会话用的模型**不接受图像输入**
+（`read_image` 会直接返回 `model ... does not declare image input`），所以：
+
+- **能机械判的**交给 `node tools/shot-check.mjs`——它逐页截图后自己解 PNG，
+  断言「非白像素占比 / 不同颜色数 / 宽度」三项，用来排除**空白页、没上色、图表没画、页面过窄**。
+  本仓真实踩过：ECharts 未初始化时页面照旧有文字，但整页只剩一种颜色，当时靠「截图只有 8.7 KB」才起疑——现在是一条断言。
+- **不能机械判的**（排版好不好、留白是否合适、图表是否可读）仍然只能由**人**或**图像能力的模型**看。
+  九页截图落盘在 `D:\workspace\代币交流群\viz\deliver\shots\`，双击翻一遍约 30 秒。
+
+> 纪律：没有真的看过，就**写「未目检」**，不要写成「已目检」。机械替代只缩小必须目检的范围，不替代目检。
+
+```powershell
+node tools/shot-check.mjs                 # 9 页逐页体检（约 15 s）
+node tools/shot-check.mjs --keep          # 保留截图到 viz/.shots/
+node tools/check.mjs --shots              # 接进守卫（--full 连结票门一起跑）
+```
+
 ## 数据从哪来
 
 `D:\workspace\代币交流群\viz\manifests\*.manifest.json`（16 份）+ 它们引用的数据文件。

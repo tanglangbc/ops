@@ -26,6 +26,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
 const argv = process.argv.slice(2)
 const WANT_GATE = argv.includes('--gate') || argv.includes('--full')
+const WANT_SHOTS = argv.includes('--shots') || argv.includes('--full')
 const files = argv.filter(a => !a.startsWith('--'))
 
 /** 这些目录/前缀不扫：依赖、产物、会话日志、临时目录 */
@@ -136,9 +137,25 @@ for (const f of agentFiles) {
 }
 endSection(`${agentFiles.length} 个 AGENTS.md 的 ${ptrCount} 条路径指针全部存在`)
 
-/* ── ⑤ 慢检：verify-gate（--gate/--full） ─────────────────────────────── */
+/* ── ⑤ 截图体检（目检的机械替代：空白 / 未上色 / 宽度；约 15 s） ───────── */
+if (WANT_SHOTS) {
+  console.log('⑤ 截图体检（空白 / 未上色 / 宽度）')
+  const sc = path.join(ROOT, 'viz', 'tools', 'shot-check.mjs')
+  const hasDist = fs.existsSync(path.join(ROOT, 'viz', 'dist', 'index.html'))
+  if (!fs.existsSync(sc)) bad('viz/tools/shot-check.mjs 不存在')
+  else if (!hasDist) notes.push('跳过截图体检：viz/dist 不存在（先跑 pnpm build）')
+  else {
+    const r = spawnSync(process.execPath, [sc, '--quiet'], { cwd: path.join(ROOT, 'viz'), encoding: 'utf8' })
+    const tail = (r.stdout || '').trim().split('\n').slice(-3).join('\n')
+    if (r.status !== 0) bad(`截图体检未通过（空白/未上色/宽度）:\n${tail}`)
+    else ok('9 页截图非空白、已上色、宽度达标（**仍不等于目检**）')
+    secFails = 0
+  }
+}
+
+/* ── ⑥ 慢检：verify-gate（--gate/--full） ─────────────────────────────── */
 if (WANT_GATE) {
-  console.log('⑤ 结票门 verify-gate（抽数反查 / 字节可复现 / 越界扫描 / 不静默）')
+  console.log('⑥ 结票门 verify-gate（抽数反查 / 字节可复现 / 越界扫描 / 不静默）')
   const gate = path.join(ROOT, 'viz', 'tools', 'verify-gate.mjs')
   const hasDist = fs.existsSync(path.join(ROOT, 'viz', 'dist', 'index.html'))
   const hasDeps = fs.existsSync(path.join(ROOT, 'viz', 'node_modules', 'vite'))

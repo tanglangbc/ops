@@ -20,6 +20,7 @@ viz/index.html
 viz/pages/
 viz/src/gen/
 viz/src/entries/
+viz/.shots/       # shot-check 的临时截图（不保留、不入库）
 
 # Python / 测试缓存
 __pycache__/
