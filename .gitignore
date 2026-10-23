@@ -11,8 +11,10 @@
 
 # 站点构建产物与烘焙中间物（可由 manifest + 脚本重建，见 docs/adr/0001）
 viz/dist/
-viz/dist.prev/     # build-all 留下的上一版可用产物（回滚点，约 12 MB）
-viz/dist.next/     # 暂存目录：自检通过前不切换
+# build-all 留下的上一版可用产物（回滚点，约 12 MB）
+viz/dist.prev/
+# 暂存目录：自检通过前不切换
+viz/dist.next/
 viz/.gen/
 viz/node_modules/
 # 生成物（tools/gen-html.mjs 与 tools/build-data.mjs 产出，不入库）
@@ -20,7 +22,8 @@ viz/index.html
 viz/pages/
 viz/src/gen/
 viz/src/entries/
-viz/.shots/       # shot-check 的临时截图（不保留、不入库）
+# shot-check 的临时截图（不保留、不入库）
+viz/.shots/
 
 # Python / 测试缓存
 __pycache__/
