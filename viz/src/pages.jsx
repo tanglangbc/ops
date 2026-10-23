@@ -267,7 +267,7 @@ export function CarryNowPage({ data }) {
             <div className="cap">最近 30 天实测 · {pair.measured.window} · 依据 {pair.measured.cite}</div>
           </div>
         </div>
-        <div className="kv"><TierBadge layer="数据推断" /><TierBadge layer="已发生事实" /></div>
+        <div className="kv"><TierBadge layer="数据推断" tier="infer" /><TierBadge layer="已发生事实" tier="fact" /></div>
       </Card>
       <Card title="各品种窗口年化（来自最近一次采集的结构化输出）"
         right={p ? <span className="badge fact">已发生事实</span> : null}>

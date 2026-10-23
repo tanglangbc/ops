@@ -25,8 +25,14 @@ function Shell({ page, data, manifests }) {
   // 陈旧判定：本页相关 manifest 的 coverage.end 最大值；首页看全量
   const ids = isIndex ? Object.keys(manifests.manifests) : relevantManifestIds(page, data)
   const ends = ids.map(id => manifests.manifests[id]?.coverage?.end_utc).filter(Boolean)
-  // 阈值来自数据根共享判定模块（tools/verdict.py），经 manifest 下来；本页任一 manifest 带上即可
-  const thresholds = ids.map(id => manifests.manifests[id]?.staleness?.thresholds_hours).find(Boolean)
+  // 阈值来自数据根共享判定模块（tools/verdict.py），经 manifest 下发。
+  // 本页各 manifest 的阈值**必须一致**；不一致就**不替它挑一个**，交给 StaleBar 显式报出来（#14 评审）。
+  const allRules = ids.map(id => manifests.manifests[id]?.staleness?.thresholds_hours).filter(Boolean)
+  const distinctRules = [...new Set(allRules.map(r => JSON.stringify(r)))]
+  const thresholds = distinctRules.length === 1 ? allRules[0] : null
+  const thresholdsIssue = distinctRules.length > 1
+    ? `本页各 manifest 的陈旧阈值不一致（${distinctRules.join(' vs ')}），不替它挑一个`
+    : null
 
   const C = COMPONENTS[page] || Pages.IndexPage
   return (
@@ -47,7 +53,7 @@ function Shell({ page, data, manifests }) {
           ))}
         </nav>
       </header>
-      <StaleBar ends={ends} builtAt={manifests.generated_at_utc} thresholds={thresholds} />
+      <StaleBar ends={ends} builtAt={manifests.generated_at_utc} thresholds={thresholds} issue={thresholdsIssue} />
       <main className="wrap">
         <C data={data} manifests={manifests} link={link} />
         {manifests.problems?.length ? (

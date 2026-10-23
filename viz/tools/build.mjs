@@ -56,7 +56,7 @@ if (steps[steps.length - 1].ok) {
 const ok = steps.every(s => s.ok)
 
 // 构建状态文件（#9 约定的 _viz_last_status.json）
-let distSha = null, pageCount = 0, coverageEnd = null
+let distSha = null, pageCount = 0, coverageEnd = null, rule = null, ruleConflict = null
 try {
   const pages = ['index.html', ...fs.readdirSync(path.join(DIST, 'pages')).map(f => `pages/${f}`)]
   pageCount = pages.length
@@ -66,6 +66,12 @@ try {
   const man = JSON.parse(fs.readFileSync(path.join(VIZ, 'src', 'gen', 'manifests.json'), 'utf8'))
   const ends = Object.values(man.manifests).map(m => m.coverage?.end_utc).filter(Boolean).map(t => Date.parse(t)).filter(t => !Number.isNaN(t))
   if (ends.length) coverageEnd = new Date(Math.max(...ends)).toISOString()
+  // 陈旧阈值来自数据根共享判定模块（tools/verdict.py），经 manifest 下发。
+  // 本文件此前自己写死 36/72——那是与共享模块重复的**第二套判据**（#14 评审发现，已修）。
+  const rules = [...new Set(Object.values(man.manifests)
+    .map(m => m.staleness?.thresholds_hours).filter(Boolean).map(r => JSON.stringify(r)))]
+  if (rules.length === 1) rule = JSON.parse(rules[0])
+  else if (rules.length > 1) ruleConflict = rules
 } catch { /* 核不到 */ }
 
 const now = Date.now()
@@ -79,8 +85,10 @@ const status = {
   dist_sha256_combined: distSha,
   data_coverage_end: coverageEnd ?? '核不到',
   age_hours: ageH === null ? '核不到' : Number(ageH.toFixed(1)),
-  stale: ageH === null ? '核不到' : ageH > 36,
-  stale_severe: ageH === null ? '核不到' : ageH > 72,
+  staleness_rule: rule ?? '核不到',
+  staleness_rule_conflict: ruleConflict ?? null,
+  stale: ageH === null || !rule ? '核不到' : ageH > rule.stale,
+  stale_severe: ageH === null || !rule ? '核不到' : ageH > rule.severe,
   note: '运行时不读本文件（file:// 下读本地文件被 CORS 拦）；页面按 manifest coverage.end 自行判定陈旧',
 }
 fs.mkdirSync(path.dirname(STATUS_FILE), { recursive: true })

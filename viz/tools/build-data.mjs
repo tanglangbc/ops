@@ -230,6 +230,9 @@ function trimManifest(m) {
     title: m.render_hints?.title ?? m.artifact_id,
     gap_count: gaps,
     anomaly_counts: anomalies.map(a => ({ rule_id: a.rule_id, count: a.count })),
+    // 三档的机器键与判定代码指纹：都由数据根给出，渲染器不再自维护「中文名→类名」的映射表
+    verdict_tier: m.verdict_tier ?? null,
+    judgement_sha256_16: m.judgement_sha256 ? String(m.judgement_sha256).slice(0, 16) : null,
     // 陈旧判定的**规则**（阈值）来自数据根的共享判定模块 tools/verdict.py，随 manifest 下来。
     // 页面按查看时刻用这套阈值求值——阈值不在 JS 里写死，这是 #14 的要点。
     staleness: m.staleness ?? null,
@@ -238,9 +241,19 @@ function trimManifest(m) {
 
 const trimmed = Object.fromEntries(Object.entries(manifests).map(([k, v]) => {
   const t = trimManifest(v)
-  // 缺阈值就**不静默**：陈旧红条将无法判定，必须在构建期被报出来（契约 v1.2 起 manifest 必带 staleness）
+  // 缺阈值就**不静默**（problems 的注释写着：缺口/核不到全部显式带到页面上）。
+  // 但必须**按版本**判：契约 §6 明说 v1.0/v1.1 的存量件继续有效——自称 ≥1.2 却缺才是违约；
+  // 早于 1.2 的件照样报（该页确实判不了陈旧），措辞上区分开，别把旧件说成违约。
   if (v && !v.staleness?.thresholds_hours) {
-    problems.push({ page: t.artifact_id, what: 'manifest 缺 staleness.thresholds_hours（契约 v1.2）→ 该页陈旧档位不可判定' })
+    const sv = String(v.schema_version || '1.0')
+    const parts = sv.split('.').map(n => Number(n) || 0)
+    const atLeast12 = parts[0] > 1 || (parts[0] === 1 && parts[1] >= 2)
+    problems.push({
+      page: t.artifact_id,
+      what: atLeast12
+        ? `manifest 缺 staleness.thresholds_hours，而它自称 schema_version ${sv}（契约 v1.2 起该字段必填）→ 该页陈旧档位不可判定`
+        : `manifest 缺 staleness.thresholds_hours（schema_version ${sv}，早于 v1.2，按契约 §6 仍有效）→ 该页陈旧档位不可判定`,
+    })
   }
   return [k, t]
 }))

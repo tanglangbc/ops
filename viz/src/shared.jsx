@@ -3,14 +3,15 @@
  * 全部按 docs/visual-standards.md 的约定实现，不要在这里另立口径。
  */
 
-export const TIER_LABEL = {
-  '已发生事实': 'fact', '数据推断': 'infer', '交易假设': 'hypo',
-}
-const tierOf = (v) => TIER_LABEL[v] || 'hypo'
+/** 三档徽标。三档的**机器键**由产物给出（`manifest.verdict_tier`，来自数据根 tools/verdict.py
+ *  的 `tier_key`）；本文件**不再**维护「中文名 → 类名」的映射表——那是与共享判定模块重复的
+ *  第二套判据（#14 评审发现，已删）。类名 fact/infer/hypo 是样式细节，不是判定。
+ *  拿不到键就按最保守的「交易假设」显示并标未验证。 */
+const TIER_CLASSES = ['fact', 'infer', 'hypo']
 
-export function TierBadge({ layer }) {
-  const t = tierOf(layer)
-  const text = t === 'hypo' ? '交易假设·未验证' : layer
+export function TierBadge({ layer, tier }) {
+  const t = TIER_CLASSES.includes(tier) ? tier : 'hypo'
+  const text = t === 'hypo' ? `${layer || '交易假设'}·未验证` : layer
   return <span className={`badge ${t}`}>{text}</span>
 }
 
@@ -78,10 +79,19 @@ export function Legend() {
  * 只会让页面永远显示烘焙那一刻的新鲜度，那是行为改变。
  * 拿不到阈值就**不判**（返回 null），绝不自己臆造一个：宁可不显示，也不静默地说错。
  */
-export function StaleBar({ ends = [], builtAt, thresholds }) {
+export function StaleBar({ ends = [], builtAt, thresholds, issue }) {
   const stale = Number(thresholds?.stale)
   const severe = Number(thresholds?.severe)
-  if (!Number.isFinite(stale) || !Number.isFinite(severe)) return null
+  if (!Number.isFinite(stale) || !Number.isFinite(severe)) {
+    // 拿不到规则就**不判**，但也**不许静默**——本仓明文「不允许用空白假装没算」。
+    // 显式说明缺什么（或为何不一致），而不是什么都不画。
+    return (
+      <div className="gap">
+        <b>核不到</b>：{issue || 'manifest 未带 staleness.thresholds_hours'}，
+        本页陈旧档位不可判定（契约 v1.2 起该字段必填）
+      </div>
+    )
+  }
 
   const now = Date.now()
   const parsed = ends.map(e => Date.parse(e)).filter(t => !Number.isNaN(t))
