@@ -98,3 +98,42 @@ Error: cannot modify "...": file changed since it was read — re-read the file,
 
 **怎么验证**
 - `node tools/session-digest.mjs` 的按工具失败表：`web_fetch` 3/3、`web_search` 1/1、`advanced_search` 0——这三行就是本条的证据。
+
+---
+
+## G-005 · 远端超时会让**回执**和**票面**都说错话（2026-10-23）
+
+**现象**：这一整轮里 `api.github.com` 反复出现 `net/http: TLS handshake timeout`。**读操作一直正常，写操作时好时坏**——而坏的时候，工具给出的说法**不一定对**。本会话真实撞到四种形态，每一种都值得单独记住：
+
+| # | 形态 | 真相 |
+|---|---|---|
+| 1 | 建票/上报回执说「超时了，是否生效说不清」 | **票其实建成了**。`gh issue list --search <标题>` 一查就在（#32 就是这样） |
+| 2 | 票面被**自动追加**一段「你在本仓只有**读权限**，标签打不上，建议先 fork 到自己名下」 | **假的**。一次幂等写测试当场证伪：`gh issue edit 32 --add-label ready-for-agent` 成功，复核 `labels == ["ready-for-agent"]`。真正原因是**TLS 超时被误判成权限不足** |
+| 3 | 写操作**回执**里的字段：`parentKey: null`、`comments: []`、assignee 缺 `kind`/`name` | **薄投影，不是票的真值**。同一时刻 `deck_issue_get` 读到的父票与评论都是对的（与 GraphQL 地面真相逐项吻合） |
+| 4 | 关闭回执说「写命令**已回成功**，但写后**读回失败**，是不是 closed 没确认」 | 这句**是准确的**：去 gh 侧核实，#15 确实 `closed_at=2026-10-23T13:05:12Z` |
+
+**已冻结的第一号教训 —— 绝不要用带 `2>&1` 的重定向去喂 `--body-file`**
+
+本轮差点干成一次破坏性操作：
+
+```bash
+gh issue view 32 --json body --jq .body > /tmp/b32.md 2>&1   # ← 危险
+...
+gh issue edit 32 --body-file /tmp/b32.md                     # ← 会把正文覆盖成报错文本
+```
+
+若那条 `view` 超时，`/tmp/b32.md` 里装的就是 **71 字节的 `Post "...": TLS handshake timeout`**——下一条 `--body-file` 会把整张票的正文**替换成一段报错信息**。**取正文与写正文必须分两步、且中间要有守卫**（本轮的护栏：文件必须含幂等锚 `DSH-IDEMPOTENCY-KEY`、剥离后长度仍 > 800、写回后复核关键串仍在）。不要 `2>&1` 进数据文件。
+
+**正确做法**
+
+1. **超时后先核实，再决定要不要重放**：建票查 `gh issue list --search <标题>`；改票读 `gh api repos/<owner>/<repo>/issues/<n>` 看 `state`/`labels`。**读比写可靠得多，先读。**
+2. **对「权限不足」这类论断，用一次幂等写测试当场验**，不要照它去动配置或改仓库形态（#32 那次若照做就会白 fork 一个仓）。
+3. **要票的真实状态一律用 `deck_issue_get`**（或 gh），**不要把写操作的回执当状态用**——回执可能只带薄投影，且可能是**动作前**的快照。
+4. 写操作**一律幂等**（打标签、加评论、写回同一正文），这样超时后重试是安全的；不幂等的写（建票）超时后必须先查再决定。
+
+**怎么验证**
+
+- 查票是否真建成：`gh issue list --repo tanglangbc/ops --search "T19" --json number,title,state`
+- 验「读权限」论断为假：`gh issue edit <n> --add-label ready-for-agent` 然后 `gh issue view <n> --json labels`
+- 验回执 vs 真相不一致：同一条票，比较 `deck_issue_get`（父票/评论/A）与任一写回执的 `parentKey`/`comments`
+- 验重定向护栏：故意让 `gh issue view` 超时，`wc -c` 那个临时文件——正常应是票面字节数，而不是 71。

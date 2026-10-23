@@ -189,7 +189,7 @@ if (WANT_GATE) {
    差点就写成那样。票一建出来外人就能读，因此要比对的是**远端已有**的那些文件。
    只判本仓路径：首段必须是本仓顶层条目；数据根路径与 Windows 绝对路径一律不判。 */
 if (WANT_GATE) {
-  console.log('⑦ 票面引用（open issue 正文里的仓内路径必须在 origin/master 上存在）')
+  console.log('⑦ 票面引用（open issue 正文里的**本仓**路径必须已推送到 origin/master）')
   const NLc = String.fromCharCode(10)
   const BS = String.fromCharCode(92), SP = String.fromCharCode(32), TAB = String.fromCharCode(9), CR = String.fromCharCode(13)
   const ghv = spawnSync('gh', ['--version'], { encoding: 'utf8' })
@@ -210,6 +210,7 @@ if (WANT_GATE) {
     if (issues) {
       const tops = new Set(fs.readdirSync(ROOT))
       let issuePtrs = 0
+      let skippedForeign = 0
       for (const it of issues) {
         const seen = new Set()
         for (const m of String(it.body || '').matchAll(/`([^`]+)`/g)) {
@@ -234,11 +235,17 @@ if (WANT_GATE) {
           if (!(tok.includes('/') || /[.](md|mjs|js|json|ps1|py|yml|yaml)$/.test(tok))) continue
           if (!tops.has(tok.split('/')[0])) continue        // 不属于本仓 → 不判
           seen.add(tok)
+          // 只判「**本仓有、远端没有」这一种——那才是本检查要防的：文件在本地却没推，就发了公开票。
+          // 光凭「首段是顶层目录」不足以断定它是本仓路径：D:\ops 与数据根**都有 tools/**，
+          // 于是数据根的 `tools/egress.py` 被本条误报过（#32）。判据收紧为「路径在**本仓工作区**里
+          // 确实存在」——跨仓（数据根）引用因此自然略过，误报归零，而当初那次真实事故仍然拦得住。
+          if (!fs.existsSync(path.join(ROOT, tok))) { skippedForeign++; continue }
           issuePtrs++
-          if (!basis.set.has(tok)) bad(`issue #${it.number}: 引用了不在 ${basis.ref} 上的仓内路径 \`${tok}\`` + (fs.existsSync(path.join(ROOT, tok)) ? '（本地有、远端没有——先提交并推送再发这类票）' : ''))
+          if (!basis.set.has(tok)) bad(`issue #${it.number}: 本仓路径 \`${tok}\` 在 ${basis.ref} 上不存在（本地有、远端没有——先提交并推送再发这类票）`)
         }
       }
-      endSection(`${issues.length} 个 open issue 的 ${issuePtrs} 条仓内路径引用，在 ${basis.ref} 上都存在`)
+      endSection(`${issues.length} 个 open issue 的 ${issuePtrs} 条本仓路径引用，在 ${basis.ref} 上都存在`
+        + (skippedForeign ? `（另有 ${skippedForeign} 条不在本仓工作区，按跨仓引用略过）` : ''))
     }
   }
 }
