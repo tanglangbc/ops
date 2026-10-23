@@ -230,10 +230,20 @@ function trimManifest(m) {
     title: m.render_hints?.title ?? m.artifact_id,
     gap_count: gaps,
     anomaly_counts: anomalies.map(a => ({ rule_id: a.rule_id, count: a.count })),
+    // 陈旧判定的**规则**（阈值）来自数据根的共享判定模块 tools/verdict.py，随 manifest 下来。
+    // 页面按查看时刻用这套阈值求值——阈值不在 JS 里写死，这是 #14 的要点。
+    staleness: m.staleness ?? null,
   }
 }
 
-const trimmed = Object.fromEntries(Object.entries(manifests).map(([k, v]) => [k, trimManifest(v)]))
+const trimmed = Object.fromEntries(Object.entries(manifests).map(([k, v]) => {
+  const t = trimManifest(v)
+  // 缺阈值就**不静默**：陈旧红条将无法判定，必须在构建期被报出来（契约 v1.2 起 manifest 必带 staleness）
+  if (v && !v.staleness?.thresholds_hours) {
+    problems.push({ page: t.artifact_id, what: 'manifest 缺 staleness.thresholds_hours（契约 v1.2）→ 该页陈旧档位不可判定' })
+  }
+  return [k, t]
+}))
 
 const PAGE_IDS = [
   'index',

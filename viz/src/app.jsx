@@ -22,9 +22,11 @@ function Shell({ page, data, manifests }) {
   const link = (id) => (isIndex ? `./pages/${id}.html` : (id === page ? '#' : `./${id}.html`))
   const home = isIndex ? './index.html' : '../index.html'
 
-  // 陈旧判定（#9）：本页相关 manifest 的 coverage.end 最大值；首页看全量
+  // 陈旧判定：本页相关 manifest 的 coverage.end 最大值；首页看全量
   const ids = isIndex ? Object.keys(manifests.manifests) : relevantManifestIds(page, data)
   const ends = ids.map(id => manifests.manifests[id]?.coverage?.end_utc).filter(Boolean)
+  // 阈值来自数据根共享判定模块（tools/verdict.py），经 manifest 下来；本页任一 manifest 带上即可
+  const thresholds = ids.map(id => manifests.manifests[id]?.staleness?.thresholds_hours).find(Boolean)
 
   const C = COMPONENTS[page] || Pages.IndexPage
   return (
@@ -32,7 +34,7 @@ function Shell({ page, data, manifests }) {
       <header className="top">
         <div className="row">
           <h1>{TITLES[page] || page}</h1>
-          <span className="meta">呈现层 · 只读 manifest 与其引用文件（契约 v1）</span>
+          <span className="meta">呈现层 · 只读 manifest 与其引用文件（契约 v1.2）</span>
         </div>
         <nav className="crumbs">
           <a href={home}>站点首页</a>
@@ -45,7 +47,7 @@ function Shell({ page, data, manifests }) {
           ))}
         </nav>
       </header>
-      <StaleBar ends={ends} builtAt={manifests.generated_at_utc} />
+      <StaleBar ends={ends} builtAt={manifests.generated_at_utc} thresholds={thresholds} />
       <main className="wrap">
         <C data={data} manifests={manifests} link={link} />
         {manifests.problems?.length ? (

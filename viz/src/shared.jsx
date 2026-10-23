@@ -14,12 +14,15 @@ export function TierBadge({ layer }) {
   return <span className={`badge ${t}`}>{text}</span>
 }
 
-/** 状态只有三态（用户 2026-10-22 明确否决第四态）；不认识的取值一律显示为「证据不足」 */
+/** 状态只有三态（用户 2026-10-22 明确否决第四态）；取值是**封闭词表**，不认识的一律显示为「证据不足」。
+ *  归位不再用子串猜测——三态由数据根共享判定模块（tools/verdict.py 的 normalize_status）负责，
+ *  产物里的 status 已是规范值；这里只剩「显示」这一件事。（#14） */
+const STATUS_CLASS = { '通过': 'pass', '不通过': 'fail', '证据不足': 'insufficient' }
+
 export function VerdictBadge({ verdict }) {
   const v = String(verdict ?? '')
-  if (v.includes('通过') && !v.includes('不')) return <span className="status pass">通过</span>
-  if (v.includes('不通过') || v.includes('FAIL')) return <span className="status fail">不通过</span>
-  return <span className="status insufficient">证据不足</span>
+  const label = STATUS_CLASS[v] ? v : '证据不足'
+  return <span className={`status ${STATUS_CLASS[label]}`}>{label}</span>
 }
 
 /** VS-01 §5 六项：来源 / 实验编号 / 口径 / 生成时刻 / 数据截止 / 档位。缺一即作废 */
@@ -67,23 +70,33 @@ export function Legend() {
 }
 
 /**
- * #9 的陈旧判定：manifest.coverage.end（数据侧）与页面构建时刻（站点侧）任一超 36h 即陈旧；
- * 连续 3 天 → 严重陈旧。这里只看数据侧（站点侧由构建时刻兜底，构建器会写入）。
+ * 陈旧判定：manifest.coverage.end（数据侧）与烘焙时刻（站点侧）任一超阈值即陈旧。
+ *
+ * **阈值不从本文件来**（#14）：它是数据根共享判定模块 tools/verdict.py 的 `thresholds_hours()`，
+ * 经 manifest 的 `staleness.thresholds_hours` 下来（再经 build-data.mjs 的 trimManifest 透传）。
+ * 这里只做「在**查看时刻**求值」这一件事——陈旧是查看时刻的函数，把某一刻的档位冻结进 manifest
+ * 只会让页面永远显示烘焙那一刻的新鲜度，那是行为改变。
+ * 拿不到阈值就**不判**（返回 null），绝不自己臆造一个：宁可不显示，也不静默地说错。
  */
-export function StaleBar({ ends = [], builtAt }) {
+export function StaleBar({ ends = [], builtAt, thresholds }) {
+  const stale = Number(thresholds?.stale)
+  const severe = Number(thresholds?.severe)
+  if (!Number.isFinite(stale) || !Number.isFinite(severe)) return null
+
   const now = Date.now()
   const parsed = ends.map(e => Date.parse(e)).filter(t => !Number.isNaN(t))
   if (!parsed.length && !builtAt) return null
   const newest = parsed.length ? Math.max(...parsed) : Date.parse(builtAt)
+  if (Number.isNaN(newest)) return null
   const hours = (now - newest) / 3600e3
-  if (hours <= 36) return null
-  const severe = hours > 72
+  if (hours <= stale) return null
+  const isSevere = hours > severe
   const when = new Date(newest).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
   return (
     <div className="stale-bar">
-      <b>{severe ? '严重陈旧' : '本页数据陈旧'}</b>
-      ：数据停留在 {when}（距今 {Math.round(hours)} 小时，阈值 36 小时）
-      {severe ? '　连续 3 天以上未刷新' : ''}
+      <b>{isSevere ? '严重陈旧' : '本页数据陈旧'}</b>
+      ：数据停留在 {when}（距今 {Math.round(hours)} 小时，阈值 {stale} 小时）
+      {isSevere ? `　超过 ${severe} 小时` : ''}
     </div>
   )
 }
