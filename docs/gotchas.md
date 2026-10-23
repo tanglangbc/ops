@@ -67,6 +67,7 @@ Error: cannot modify "...": file changed since it was read — re-read the file,
 **成因**
 - `FS_NOT_OBSERVED`：文件操作策略要求**本次会话内**由 `read` 工具读过目标文件才允许改；上一轮/上一个 checkpoint 里读过**不算**。
 - `FS_STALE_VERSION`：读之后文件被（自己、别的会话、或 harness 的热重载）改动过，缓存版本对不上。
+- **热重载只是其中一种成因，别一口咬定是它**：任何**外部命令改了文件**都一样触发。2026-10-23 实测一次：`git pull` 把 `AGENTS.md` 从 `173d943` 推到 `5ff8ba0`，紧接着的 `edit AGENTS.md` 立刻被判 `FS_STALE_VERSION`——当时并没有发生热重载。看到这个错先问「**谁刚动过这个文件**」（`git pull` / 脚本 / 另一个 agent / harness），再按 read → 重试。
 
 **正确做法**
 1. 改**会被热重载**的文件（`AGENTS.md`、以及任何被其他 agent 共享的文档）前，**先 `read` 再 `edit`**，不要拿记忆里的内容直接改。
@@ -75,3 +76,25 @@ Error: cannot modify "...": file changed since it was read — re-read the file,
 
 **怎么验证**
 - `node tools/session-digest.mjs --errors 8`：客观失败里会带 `errorCode`，FS 类问题直接可数。
+
+---
+
+## G-004 · 搜索与抓取是**三套**通路，各自会单独失效（2026-10-23）
+
+**现象**：同一次会话里 `web_fetch` **3/3 全败**（每次 `TOOL_TIMEOUT`，30 s）、`web_search` **1/1 全败**（`WEB_PROVIDER_CONFIGURED_MISSING`：`configured web provider "auto" is not registered`），而 `advanced_search` **3/3 全通**。三者不是同一个东西，也不共享健康状态。
+
+**实测（本次会话日志，`node tools/session-digest.mjs` 原样计数）**
+
+| 通路 | 调用 | 结果 |
+|---|---|---|
+| `web_fetch` | 3 | **3 失败**，全部 `TOOL_TIMEOUT`（30 s） |
+| `web_search`（默认 provider `auto`） | 1 | **1 失败**，`WEB_PROVIDER_CONFIGURED_MISSING` |
+| `advanced_search`（显式 engine + 自动 fallback） | 3 | **0 失败** |
+
+**正确做法**
+1. **要搜**：用 `advanced_search` 并**显式指定 engine**（或让它 fallback），不要用裸 `web_search`。
+2. **要页面正文**：不要指望文档站（`developers.binance.com` 一类）在 30 s 内返回——**走该项目的官方文档仓库 raw**（如 `raw.githubusercontent.com`）。本会话同一批币安官方文档：文档站 2 次全超时，换 raw 仓库这条路把内容拿到了。
+3. **别重试超时的抓取**：3 次超时 = 3 次白等 30 s。换通路，或者派子代理去查——但子代理会无声死，收结果前先确认它有 closing message（`session-digest.mjs` 现已把无声死计成客观失败）。
+
+**怎么验证**
+- `node tools/session-digest.mjs` 的按工具失败表：`web_fetch` 3/3、`web_search` 1/1、`advanced_search` 0——这三行就是本条的证据。

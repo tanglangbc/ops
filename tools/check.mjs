@@ -180,6 +180,69 @@ if (WANT_GATE) {
   }
 }
 
+/* ── ⑦ 票面引用（--gate：open issue 正文里引用的**仓内**路径必须存在） ──── */
+/* 为什么：本轮真实发生过——规格票**先发布**，它引用的 ADR 与调研笔记**还没提交**，
+   于是公开票上出现一批悬空引用，而没有任何检查拦住它（是我事后主动核对才发现的）。
+   与 ④ 同一判据，只是把「AGENTS.md」换成「票面」。
+   **判据必须落在 `origin/master`，不能落在工作区**：那次事故里文件在**本地是存在的**
+   （只是没提交/没推），所以 `fs.existsSync` 健全通过、什么也拦不住——写这条检查时
+   差点就写成那样。票一建出来外人就能读，因此要比对的是**远端已有**的那些文件。
+   只判本仓路径：首段必须是本仓顶层条目；数据根路径与 Windows 绝对路径一律不判。 */
+if (WANT_GATE) {
+  console.log('⑦ 票面引用（open issue 正文里的仓内路径必须在 origin/master 上存在）')
+  const NLc = String.fromCharCode(10)
+  const BS = String.fromCharCode(92), SP = String.fromCharCode(32), TAB = String.fromCharCode(9), CR = String.fromCharCode(13)
+  const ghv = spawnSync('gh', ['--version'], { encoding: 'utf8' })
+  // 比对基准：优先 origin/master（外人能读的就是这一份），退而求其次 HEAD
+  let basis = null
+  for (const ref of ['origin/master', 'HEAD']) {
+    if (basis) break
+    const g = spawnSync('git', ['ls-tree', '-r', '--name-only', ref], { cwd: ROOT, encoding: 'utf8' })
+    if (g.status === 0 && g.stdout.trim()) basis = { ref, set: new Set(g.stdout.split(NLc).map(s => s.trim()).filter(Boolean)) }
+  }
+  if (ghv.status !== 0) notes.push('跳过票面引用检查：本机没有可用的 gh')
+  else if (!basis) notes.push('跳过票面引用检查：拿不到 git 基准（origin/master 与 HEAD 都失败）')
+  else {
+    const r = spawnSync('gh', ['issue', 'list', '--state', 'open', '--limit', '200', '--json', 'number,body'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    let issues = null
+    if (r.status !== 0) notes.push('跳过票面引用检查：gh issue list 未成功')
+    else { try { issues = JSON.parse(r.stdout) } catch { notes.push('跳过票面引用检查：gh 输出无法解析') } }
+    if (issues) {
+      const tops = new Set(fs.readdirSync(ROOT))
+      let issuePtrs = 0
+      for (const it of issues) {
+        const seen = new Set()
+        for (const m of String(it.body || '').matchAll(/`([^`]+)`/g)) {
+          const tok = m[1].trim()
+          if (!tok || seen.has(tok)) continue
+          // ADR 常被**按编号**引用（`ADR-0004`），没有斜杠也不是 .md——正是本轮那次事故的形状。
+          // 单靠路径判据会漏掉它，所以这里单独把编号解析成 docs/adr/<n>-*.md 再判。
+          const adr = tok.match(/^ADR-([0-9]{4})$/)
+          if (adr) {
+            seen.add(tok)
+            const pref = 'docs/adr/' + adr[1] + '-'
+            let found = false
+            for (const p of basis.set) { if (p.startsWith(pref)) { found = true; break } }
+            issuePtrs++
+            if (!found) bad(`issue #${it.number}: 引用了 ${tok}，但 ${basis.ref} 上没有 docs/adr/${adr[1]}-*.md`)
+            continue
+          }
+          if (tok.includes(SP) || tok.includes(TAB) || tok.includes(NLc) || tok.includes(CR)) continue
+          if (tok.includes(BS)) continue                    // Windows / 数据根路径
+          if (/[<>*?|]/.test(tok)) continue
+          if (tok.startsWith('http') || /^[A-Za-z]:/.test(tok)) continue
+          if (!(tok.includes('/') || /[.](md|mjs|js|json|ps1|py|yml|yaml)$/.test(tok))) continue
+          if (!tops.has(tok.split('/')[0])) continue        // 不属于本仓 → 不判
+          seen.add(tok)
+          issuePtrs++
+          if (!basis.set.has(tok)) bad(`issue #${it.number}: 引用了不在 ${basis.ref} 上的仓内路径 \`${tok}\`` + (fs.existsSync(path.join(ROOT, tok)) ? '（本地有、远端没有——先提交并推送再发这类票）' : ''))
+        }
+      }
+      endSection(`${issues.length} 个 open issue 的 ${issuePtrs} 条仓内路径引用，在 ${basis.ref} 上都存在`)
+    }
+  }
+}
+
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */
 console.log('')
 for (const n of notes) console.log(`  · ${n}`)

@@ -8,6 +8,13 @@
  *   ② **有结构化信号就别用文本模式**：结果记录带 `isError`（本次 399 条里 10 条为真）与 `errorCode`。
  *      本脚本因此分两层：**客观失败 = isError**；文本命中只算「疑似」，单列，绝不混进失败数。
  *   ③ **配对用 callId**，不要靠序号或时间戳猜哪条结果属于哪次调用。
+ *   ④ **子代理会无声死**。harness **只**把它写成一条 `user/message` 散文
+ *      （`Background subagent <id> failed before it finished.`），**没有 isError、没有 errorCode、
+ *      也没有对应的 job/registered 载荷**（job 记录只有 type/seq/time）。所以「结构化信号优先」
+ *      这条路在子代理上**根本走不通**——本脚本作**一处显式的例外**：只认 `user/message`
+ *      上的这一种机器形状。限制在 `user/message` 是关键：**我自己的叙述**是 `assistant/message`、
+ *      **我 grep 出来的结果**是 `tool/result`，两者都被这道限制挡在外面，不会污染失败数。
+ *      它计进「客观失败」，并计入 subagent 那一行的失败数。
  *
  * 用法：
  *   node tools/session-digest.mjs                # 当前工作区 panel 里最近一次会话
@@ -33,6 +40,8 @@ const ERRORS = Number(argOf('--errors', '0'))
  * 分类模式：每条都要求「机器才写得出的字面形状」，因为**误报会训练人忽略告警**。
  * 只在 isError=true 的结果上做分类；文本命中但 isError=false 的只进「疑似」区。
  */
+const NL = String.fromCharCode(10)
+
 const CLASSES = [
   { name: 'unknown tool', re: /unknown tool "/ },
   { name: 'command failed', re: /\[COMMAND_FAILED|\[exit code: [1-9]\d*\]/ },
@@ -41,6 +50,7 @@ const CLASSES = [
   { name: 'capability', re: /does not declare (?:image input|support)|is not supported|not available in/ },
   { name: 'denied', re: /sandbox: file access denied|permission denied|approval (?:required|rejected)/ },
   { name: 'rejected', re: /"verdict":\s*\{\s*"state":\s*"REJECT|"moved_to":\s*"rejected"/ },
+  { name: 'subagent died', re: /^Background subagent [0-9a-f]/ },
   { name: 'quota/deferred', re: /gate-defer|read quota|quota[: ]*deferred|"deferred":\s*true/ },
 ]
 const classify = (text) => CLASSES.filter(c => c.re.test(text)).map(c => c.name)
@@ -83,6 +93,14 @@ function readSession(file) {
         const cls = classify(text)
         if (cls.length) suspected.push({ tool, classes: cls, snippet, seq: o.seq })
       }
+    } else if (o.type === 'user/message') {
+      const text = String(o.payload ? (o.payload.text || '') : '')
+      const firstLine = text.split(NL)[0]
+      if (/^Background subagent [0-9a-f][0-9a-f-]{7,} failed before it finished/.test(firstLine)) {
+        const cls = classify(text)
+        errors.push({ tool: 'subagent', classes: cls.length ? cls : ['subagent died'], errorCode: 'SUBAGENT_DIED', snippet: firstLine.slice(0, 170), seq: o.seq })
+        if (byTool.has('subagent')) byTool.get('subagent').fails++
+      }
     }
   }
 
@@ -102,6 +120,11 @@ function printOne(d) {
   if (d.span) console.log(`跨度 ${fmtTime(d.span[0])} → ${fmtTime(d.span[1])}（${((d.span[1] - d.span[0]) / 60000).toFixed(0)} 分钟）`)
   console.log(`工具调用 ${d.types['tool/call'] || 0} 次 · 结果 ${d.types['tool/result'] || 0} 条`)
   console.log(`客观失败（isError）${d.errors.length} 条 · 疑似失败（文本命中）${d.suspected.length} 条`)
+  {
+    const sub = d.byTool.find(t => t.name === 'subagent')
+    const died = d.errors.filter(e => e.tool === 'subagent').length
+    if (sub || died) console.log(`子代理 派 ${sub ? sub.calls : 0} 次 · 无声失败 ${died} 次（含在「客观失败」里）`)
+  }
   if (d.errorCodes.length) console.log(`errorCode：${d.errorCodes.map(([k, v]) => `${k}×${v}`).join('  ')}`)
   console.log('')
   console.log('工具'.padEnd(30) + '调用   客观失败')
